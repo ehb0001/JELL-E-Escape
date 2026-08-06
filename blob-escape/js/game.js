@@ -4,10 +4,33 @@
 class Game {
     constructor() {
         this.canvas = document.getElementById('game');
+        this.container = document.getElementById('game-container');
         this.ctx = this.canvas.getContext('2d');
         this.state = GAME_STATE.TITLE;
         this.currentLevel = 0;
         this.unlockedLevels = this._loadProgress();
+
+        // Title bar DOM refs
+        this.el = {
+            stageNum: document.getElementById('title-bar-stage-num'),
+            stageName: document.getElementById('title-bar-stage-name'),
+            stateIcon: document.getElementById('title-bar-state-icon'),
+            stateName: document.getElementById('title-bar-state-name'),
+            moves: document.getElementById('title-bar-moves'),
+            restartBtn: document.getElementById('title-bar-restart'),
+        };
+        this.el.restartBtn.addEventListener('click', () => {
+            if (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.ANIMATING) {
+                this._restartLevel();
+            }
+        });
+        document.getElementById('title-bar-stage').addEventListener('click', () => {
+            if (this.state === GAME_STATE.PLAYING) {
+                this.state = GAME_STATE.LEVEL_SELECT;
+                this._setupLevelSelectUI();
+                document.getElementById('ui-overlay').style.display = 'flex';
+            }
+        });
 
         // Systems
         this.level = new Level();
@@ -42,13 +65,14 @@ class Game {
 
     _resize() {
         const dpr = window.devicePixelRatio || 1;
-        this.canvas.width = window.innerWidth * dpr;
-        this.canvas.height = window.innerHeight * dpr;
-        this.canvas.style.width = window.innerWidth + 'px';
-        this.canvas.style.height = window.innerHeight + 'px';
+        const rect = this.container.getBoundingClientRect();
+        this.width = rect.width;
+        this.height = rect.height;
+        this.canvas.width = this.width * dpr;
+        this.canvas.height = this.height * dpr;
+        this.canvas.style.width = this.width + 'px';
+        this.canvas.style.height = this.height + 'px';
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        this.width = window.innerWidth;
-        this.height = window.innerHeight;
 
         if (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.ANIMATING) {
             this.level.calculateLayout(this.width, this.height);
@@ -140,6 +164,8 @@ class Game {
         this.state = GAME_STATE.LEVEL_SELECT;
         this.audio.playButtonClick();
         this._setupLevelSelectUI();
+        document.body.classList.remove('at-title');
+        this._resize();
     }
 
     _setupLevelSelectUI() {
@@ -278,10 +304,12 @@ class Game {
             }
         }
 
+        // Items picked up mid-move only take visual/state effect this turn;
+        // their gameplay effect (ice kick, magnet snap, electric passage) starts next turn.
+        const startState = this.player.state;
         let itemsConsumed = [];
         let ix = this.player.gridX;
         let iy = this.player.gridY;
-        let tempState = this.player.state;
 
         while(ix !== x || iy !== y) {
             ix += dir.x;
@@ -289,14 +317,13 @@ class Game {
             const iTile = this.level.getTile(ix, iy);
             if (isItem(iTile) && itemsConsumed.length === 0) {
                 itemsConsumed.push({x: ix, y: iy, type: iTile});
-                tempState = ITEM_TO_STATE[iTile];
             }
         }
-        
+
         let bounceX = x;
         let bounceY = y;
 
-        const pendingIceKick = hitWallType !== null && tempState === STATE.ICE;
+        const pendingIceKick = hitWallType !== null && startState === STATE.ICE;
 
         if (hitWallType === TILE.RUBBER_WALL) {
             const backDirX = -dir.x;
@@ -305,7 +332,7 @@ class Game {
             while(bounces < 2) {
                 const bx = bounceX + backDirX;
                 const by = bounceY + backDirY;
-                if(isBlocking(this.level.getTile(bx, by), tempState) || 
+                if(isBlocking(this.level.getTile(bx, by), startState) ||
                    (bx === this.player.gridX && by === this.player.gridY)) {
                     break;
                 }
@@ -714,8 +741,8 @@ class Game {
         // Player
         this.player.render(ctx, this.level);
 
-        // HUD
-        this._renderHUD(ctx, w);
+        // HUD (DOM-based, updated separately from render)
+        this._updateHUD();
 
         // Tutorial
         if (this.tutorialAlpha > 0.01) {
@@ -739,82 +766,22 @@ class Game {
         }
     }
 
-    _renderHUD(ctx, w) {
-        const y = 8;
-        const h = 52;
-
-        // Background bar
-        ctx.fillStyle = 'rgba(10,10,26,0.85)';
-        ctx.fillRect(0, 0, w, h);
-        ctx.fillStyle = 'rgba(105,240,174,0.08)';
-        ctx.fillRect(0, h - 1, w, 1);
-
-        // Level name
-        ctx.fillStyle = '#8888aa';
-        ctx.font = '11px "Orbitron", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(`Stage ${this.level.levelData.id}`, w / 2, y + 2);
-
-        ctx.fillStyle = '#ccc';
-        ctx.font = '13px "Orbitron", sans-serif';
-        ctx.fillText(this.level.levelData.name, w / 2, y + 17);
-
-        // State indicator (left)
+    _updateHUD() {
         const stateInfo = STATE_INFO[this.player.state];
-        ctx.fillStyle = stateInfo.color;
-        ctx.font = '20px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(stateInfo.icon, 12, y + 8);
 
-        ctx.fillStyle = stateInfo.color;
-        ctx.font = '11px "Orbitron", sans-serif';
-        ctx.fillText(stateInfo.name, 38, y + 14);
-
-        // Move counter (right)
-        ctx.fillStyle = '#8888aa';
-        ctx.font = '11px "Orbitron", sans-serif';
-        ctx.textAlign = 'right';
-        ctx.fillText(`Moves: ${this.player.moveCount}`, w - 60, y + 14);
-
-        // Restart button
-        ctx.fillStyle = 'rgba(255,255,255,0.15)';
-        this._roundRect(ctx, w - 48, y + 4, 38, 28, 6);
-        ctx.fill();
-        ctx.fillStyle = '#aaa';
-        ctx.font = '16px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('↺', w - 29, y + 18);
+        this.el.stageNum.textContent = `Stage ${this.level.levelData.id}`;
+        this.el.stageName.textContent = this.level.levelData.name;
+        this.el.stateIcon.textContent = stateInfo.icon;
+        this.el.stateIcon.style.color = stateInfo.color;
+        this.el.stateName.textContent = stateInfo.name;
+        this.el.stateName.style.color = stateInfo.color;
+        this.el.moves.textContent = `Moves: ${this.player.moveCount}`;
     }
 
     _handleTap(clientX, clientY) {
-        const rect = this.canvas.getBoundingClientRect();
-        const cx = clientX - rect.left;
-        const cy = clientY - rect.top;
-
         if (this.state === GAME_STATE.TITLE) {
             this._startLevelSelect();
             return;
-        }
-
-        const w = this.width;
-        const y = 8;
-        const h = 52;
-
-        // Restart button
-        if (cx > w - 48 && cx < w - 10 && cy > y + 4 && cy < y + 32 &&
-            (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.ANIMATING)) {
-            this._restartLevel();
-            return;
-        }
-
-        // Back to level select (tap level name area)
-        if (cx > w * 0.3 && cx < w * 0.7 && cy < h &&
-            (this.state === GAME_STATE.PLAYING)) {
-            this.state = GAME_STATE.LEVEL_SELECT;
-            this._setupLevelSelectUI();
-            document.getElementById('ui-overlay').style.display = 'flex';
         }
     }
 

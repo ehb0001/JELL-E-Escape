@@ -10,14 +10,37 @@
 
     <title>JELL-E: Escape the Lab</title>
 
-    <link rel="stylesheet" href="css/style.css?v=2">
+    <link rel="stylesheet" href="css/style.css?v=4">
 
     <!-- Favicon (inline SVG) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟢</text></svg>">
 </head>
-<body>
+<body class="at-title">
 
-    <canvas id="game"></canvas>
+    <div id="app-layout">
+        <header id="title-bar">
+            <div id="title-bar-stage">
+                <div id="title-bar-stage-num">Stage</div>
+                <div id="title-bar-stage-name">JELL-E</div>
+            </div>
+            <div id="title-bar-state">
+                <span id="title-bar-state-icon">○</span>
+                <span id="title-bar-state-name">Normal</span>
+            </div>
+            <div id="title-bar-moves">Moves: 0</div>
+            <button id="title-bar-restart" aria-label="Restart level">↺</button>
+        </header>
+
+        <div id="main-row">
+            <main id="game-container">
+                <canvas id="game"></canvas>
+            </main>
+
+            <aside id="sidebar">
+                <!-- Reserved for view controls, minimap, buttons, etc. -->
+            </aside>
+        </div>
+    </div>
 
     <div id="ui-overlay"></div>
 
@@ -25,9 +48,9 @@
     <script src="js/constants.js?v=3"></script>
     <script src="js/effects.js?v=3"></script>
     <script src="js/input.js?v=3"></script>
-    <script src="js/level_new.js?v=6"></script>
+    <script src="js/level_new.js?v=7"></script>
     <script src="js/player.js?v=4"></script>
-    <script src="js/game.js?v=6"></script>
+    <script src="js/game.js?v=8"></script>
 
 </body>
 </html>

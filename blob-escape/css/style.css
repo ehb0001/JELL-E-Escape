@@ -21,15 +21,133 @@ html, body {
     touch-action: none;
 }
 
-/* ── Canvas ── */
-#game {
-    display: block;
+/* ── App Layout ── */
+#app-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+
+/* On the title screen, the game canvas fills the whole viewport
+   (no title bar / sidebar chrome) to preserve the original look. */
+body.at-title #title-bar,
+body.at-title #sidebar {
+    display: none;
+}
+
+body.at-title #game-container {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+}
+
+/* ── Title Bar ── */
+#title-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 52px;
+    padding: 0 16px;
+    background: rgba(10, 10, 26, 0.85);
+    border-bottom: 1px solid rgba(105, 240, 174, 0.08);
+}
+
+#title-bar-stage {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+    cursor: pointer;
+}
+
+#title-bar-stage-num {
+    font-size: 10px;
+    color: #8888aa;
+}
+
+#title-bar-stage-name {
+    font-size: 13px;
+    color: #ccc;
+}
+
+#title-bar-state {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+}
+
+#title-bar-state-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+#title-bar-moves {
+    margin-left: auto;
+    font-size: 11px;
+    color: #8888aa;
+}
+
+#title-bar-restart {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 30px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #aaa;
+    font-size: 16px;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+#title-bar-restart:active {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Main Row ── */
+#main-row {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
+/* ── Game Container ── */
+#game-container {
+    flex: 1;
+    position: relative;
+    min-width: 0;
+}
+
+#game {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     touch-action: none;
+}
+
+/* ── Sidebar ── */
+#sidebar {
+    flex-shrink: 0;
+    width: 220px;
+    background: rgba(10, 10, 26, 0.85);
+    border-left: 1px solid rgba(105, 240, 174, 0.08);
+    overflow-y: auto;
+}
+
+@media (max-width: 700px) {
+    #sidebar {
+        width: 0;
+        border-left: none;
+    }
 }
 
 /* ── UI Overlay ── */

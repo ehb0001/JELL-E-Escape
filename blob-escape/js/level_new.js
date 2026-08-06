@@ -116,14 +116,13 @@ class Level {
     }
 
     calculateLayout(canvasWidth, canvasHeight) {
-        const hudHeight = 70;
         const padding = 15;
         const availW = canvasWidth - padding * 2;
-        const availH = canvasHeight - hudHeight - padding * 2;
+        const availH = canvasHeight - padding * 2;
         const { cols, rows } = this.getViewDimensions();
         this.tileSize = Math.floor(Math.min(availW / cols, availH / rows));
         this.offsetX = Math.floor((canvasWidth - this.tileSize * cols) / 2);
-        this.offsetY = hudHeight + Math.floor((canvasHeight - hudHeight - this.tileSize * rows) / 2);
+        this.offsetY = Math.floor((canvasHeight - this.tileSize * rows) / 2);
     }
 
     getTile(x, y, z = this.viewZ) {
