@@ -162,7 +162,10 @@ class Player {
     // ── Rendering ──
 
     render(ctx, level) {
-        const pos = level.gridToPixel(this.visualX, this.visualY);
+        // Player has no cross-layer movement yet: it always lives on level.viewZ,
+        // the Z layer that was active when the level loaded.
+        const pos = level.gridToPixelIfVisible(this.visualX, this.visualY, level.viewZ);
+        if (!pos) return; // player's plane isn't the one currently in view
         const s = level.tileSize;
         const r = s * 0.35;
 
@@ -305,8 +308,9 @@ class Player {
                 }
                 
                 if (mx !== null && dist > 0) {
-                    const mPos = level.gridToPixel(mx, my);
-                    const pPos = level.gridToPixel(this.visualX, this.visualY);
+                    const mPos = level.gridToPixelIfVisible(mx, my, level.viewZ);
+                    const pPos = level.gridToPixelIfVisible(this.visualX, this.visualY, level.viewZ);
+                    if (!mPos || !pPos) break;
                     const dx = mPos.x - pPos.x;
                     const dy = mPos.y - pPos.y;
                     

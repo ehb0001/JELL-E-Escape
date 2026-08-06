@@ -6,6 +6,8 @@ class Input {
         this.canvas = canvas;
         this.swipeCallback = null;
         this.tapCallback = null;
+        this.viewToggleCallback = null; // Tab: switch view axis
+        this.viewShiftCallback = null;  // Q/E: shift current view slice by +1/-1
         this.touchStartX = 0;
         this.touchStartY = 0;
         this.touchStartTime = 0;
@@ -22,6 +24,14 @@ class Input {
 
     onTap(callback) {
         this.tapCallback = callback;
+    }
+
+    onViewToggle(callback) {
+        this.viewToggleCallback = callback;
+    }
+
+    onViewShift(callback) {
+        this.viewShiftCallback = callback;
     }
 
     enable() { this.enabled = true; }
@@ -109,6 +119,31 @@ class Input {
         if (direction && this.swipeCallback) {
             e.preventDefault();
             this.swipeCallback(direction);
+            return;
+        }
+
+        if (e.key === 'Tab') {
+            if (this.viewToggleCallback) {
+                e.preventDefault();
+                this.viewToggleCallback();
+            }
+            return;
+        }
+
+        if (e.key === 'q' || e.key === 'Q') {
+            if (this.viewShiftCallback) {
+                e.preventDefault();
+                this.viewShiftCallback(-1);
+            }
+            return;
+        }
+
+        if (e.key === 'e' || e.key === 'E') {
+            if (this.viewShiftCallback) {
+                e.preventDefault();
+                this.viewShiftCallback(1);
+            }
+            return;
         }
     }
 }

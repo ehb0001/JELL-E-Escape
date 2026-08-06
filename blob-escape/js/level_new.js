@@ -103,16 +103,48 @@ class Level {
         else if (axis === 'x') this.viewX = index;
     }
 
+    // Shift the current view's fixed slice by delta (+1/-1), clamped to valid range.
+    shiftView(delta) {
+        if (this.viewAxis === 'x') {
+            this.viewX = Math.max(0, Math.min(this.width - 1, this.viewX + delta));
+        } else {
+            this.viewZ = Math.max(0, Math.min(this.depth - 1, this.viewZ + delta));
+        }
+    }
+
     // Dimensions of the currently visible 2D plane, in (col, row) terms.
+    // The X-view (Z-Y plane) is rendered rotated 90° clockwise from its
+    // natural Z-Y layout, so cols/rows swap to depth/height.
     getViewDimensions() {
-        if (this.viewAxis === 'x') return { cols: this.height, rows: this.depth };
+        if (this.viewAxis === 'x') return { cols: this.depth, rows: this.height };
         return { cols: this.width, rows: this.height };
     }
 
     // Map a point on the current 2D plane (col, row) to full 3D grid coords.
+    // X-view is rotated 90° CW from its natural (col=y, row=z) layout:
+    // screen-right is -Z (Z decreases rightward), screen-down is +Y.
     viewToGrid(col, row) {
-        if (this.viewAxis === 'x') return { x: this.viewX, y: col, z: row };
+        if (this.viewAxis === 'x') return { x: this.viewX, y: row, z: this.depth - 1 - col };
         return { x: col, y: row, z: this.viewZ };
+    }
+
+    // Inverse of viewToGrid: map full 3D grid coords to the current 2D plane (col, row).
+    // Returns null if (x,y,z) isn't on the plane currently being viewed.
+    gridToView(x, y, z) {
+        if (this.viewAxis === 'x') {
+            if (x !== this.viewX) return null;
+            return { col: this.depth - 1 - z, row: y };
+        }
+        if (z !== this.viewZ) return null;
+        return { col: x, row: y };
+    }
+
+    // Convenience: grid coords -> pixel position on the current view, or null
+    // if those coords aren't on the visible plane (e.g. wrong Z layer / X column).
+    gridToPixelIfVisible(x, y, z) {
+        const v = this.gridToView(x, y, z);
+        if (!v) return null;
+        return this.gridToPixel(v.col, v.row);
     }
 
     calculateLayout(canvasWidth, canvasHeight) {

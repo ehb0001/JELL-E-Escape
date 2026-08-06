@@ -50,11 +50,15 @@ class Game {
         // Transition
         this.transitionAlpha = 1;
         this.transitionTarget = 0;
+        this.transitionSpeed = 3;
+        this.pendingViewChange = null; // function to run once faded to black
 
         this._resize();
         window.addEventListener('resize', () => this._resize());
         this.input.onSwipe((dir) => this._onSwipe(dir));
         this.input.onTap((x, y) => this._handleTap(x, y));
+        this.input.onViewToggle(() => this._toggleView());
+        this.input.onViewShift((delta) => this._shiftView(delta));
 
         // Start loop
         this.lastTime = performance.now();
@@ -96,9 +100,17 @@ class Game {
         // Transition fade
         if (this.transitionAlpha !== this.transitionTarget) {
             const dir = this.transitionTarget > this.transitionAlpha ? 1 : -1;
-            this.transitionAlpha += dir * dt * 3;
+            this.transitionAlpha += dir * dt * this.transitionSpeed;
             if (dir > 0 && this.transitionAlpha >= this.transitionTarget) this.transitionAlpha = this.transitionTarget;
             if (dir < 0 && this.transitionAlpha <= this.transitionTarget) this.transitionAlpha = this.transitionTarget;
+
+            if (this.pendingViewChange && this.transitionAlpha >= 1) {
+                const change = this.pendingViewChange;
+                this.pendingViewChange = null;
+                change();
+                this.transitionTarget = 0;
+                this.transitionSpeed = 3;
+            }
         }
 
         // Screen shake decay
@@ -156,6 +168,36 @@ class Game {
                 }
                 break;
         }
+    }
+
+    // ── View (axis) switching ──
+
+    _toggleView() {
+        if (this.state !== GAME_STATE.PLAYING) return;
+        if (this.pendingViewChange) return;
+
+        this.pendingViewChange = () => {
+            // Player is always on the Z layer that was active when the level loaded
+            // (no cross-layer movement yet), so that layer doubles as the player's Z.
+            const nextAxis = this.level.viewAxis === 'z' ? 'x' : 'z';
+            const index = nextAxis === 'z' ? this.level.viewZ : this.player.gridX;
+            this.level.setView(nextAxis, index);
+            this.level.calculateLayout(this.width, this.height);
+        };
+        this.transitionSpeed = 8;
+        this.transitionTarget = 1;
+    }
+
+    _shiftView(delta) {
+        if (this.state !== GAME_STATE.PLAYING) return;
+        if (this.pendingViewChange) return;
+
+        this.pendingViewChange = () => {
+            this.level.shiftView(delta);
+            this.level.calculateLayout(this.width, this.height);
+        };
+        this.transitionSpeed = 8;
+        this.transitionTarget = 1;
     }
 
     // ── State Transitions ──
@@ -238,6 +280,13 @@ class Game {
     }
 
     // ── Physics / Movement ──
+
+    // All gameplay events (movement, items, walls) happen on the Z layer the
+    // player lives on. Convert to screen pixels only if that layer is the one
+    // currently in view; otherwise the event isn't visible right now.
+    _gridToPixel(x, y) {
+        return this.level.gridToPixelIfVisible(x, y, this.level.viewZ);
+    }
 
     _movePlayer(direction) {
         if (this.player.isMoving) return;
@@ -361,10 +410,12 @@ class Game {
         const doSecondaryMove = () => {
              itemsConsumed.forEach(item => {
                  this.level.consumeItem(item.x, item.y);
-                 const pos = this.level.gridToPixel(item.x, item.y);
-                 this.particles.burstStateChange(pos.x, pos.y, TILE_COLORS[item.type].color);
-                 this.audio.playStateChange();
-                 this.player.changeState(ITEM_TO_STATE[item.type], null, pos.x, pos.y);
+                 const pos = this._gridToPixel(item.x, item.y);
+                 if (pos) {
+                     this.particles.burstStateChange(pos.x, pos.y, TILE_COLORS[item.type].color);
+                     this.audio.playStateChange();
+                 }
+                 this.player.changeState(ITEM_TO_STATE[item.type], null, pos && pos.x, pos && pos.y);
              });
 
              // Check if we passed through any electric doors in the primary move
@@ -380,10 +431,12 @@ class Game {
                      currY += dpy;
                      if (this.level.getTile(currX, currY) === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
                          this.level.openDoor(currX, currY);
-                         const pos = this.level.gridToPixel(currX, currY);
-                         this.particles.burstStateChange(pos.x, pos.y, '#ffffff');
-                         this.audio.playStateChange();
-                         this.player.changeState(STATE.NORMAL, null, pos.x, pos.y);
+                         const pos = this._gridToPixel(currX, currY);
+                         if (pos) {
+                             this.particles.burstStateChange(pos.x, pos.y, '#ffffff');
+                             this.audio.playStateChange();
+                         }
+                         this.player.changeState(STATE.NORMAL, null, pos && pos.x, pos && pos.y);
                      }
                  }
              }
@@ -403,10 +456,12 @@ class Game {
                      currY += dy;
                      if (this.level.getTile(currX, currY) === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
                          this.level.openDoor(currX, currY);
-                         const pos = this.level.gridToPixel(currX, currY);
-                         this.particles.burstStateChange(pos.x, pos.y, '#ffffff');
-                         this.audio.playStateChange();
-                         this.player.changeState(STATE.NORMAL, null, pos.x, pos.y);
+                         const pos = this._gridToPixel(currX, currY);
+                         if (pos) {
+                             this.particles.burstStateChange(pos.x, pos.y, '#ffffff');
+                             this.audio.playStateChange();
+                         }
+                         this.player.changeState(STATE.NORMAL, null, pos && pos.x, pos && pos.y);
                      }
                  }
              }
@@ -453,9 +508,11 @@ class Game {
         const tile = this.level.getTile(kx, ky);
 
         if (isBlocking(tile, this.player.state)) {
-            const pos = this.level.gridToPixel(kx, ky);
-            this.particles.burstWallHit(pos.x, pos.y, tile);
-            this.audio.playHitWall(tile);
+            const pos = this._gridToPixel(kx, ky);
+            if (pos) {
+                this.particles.burstWallHit(pos.x, pos.y, tile);
+                this.audio.playHitWall(tile);
+            }
             this.screenShake = 3;
             if (tile === TILE.RUBBER_WALL) this.level.triggerRubberBounce(kx, ky);
             return;
@@ -466,33 +523,37 @@ class Game {
         this.input.disable();
 
         this.player.startMove(direction, kx, ky, () => {
+            const pos = this._gridToPixel(kx, ky);
             if (isItem(tile)) {
                 this.level.consumeItem(kx, ky);
-                const pos = this.level.gridToPixel(kx, ky);
-                this.particles.burstStateChange(pos.x, pos.y, TILE_COLORS[tile].color);
-                this.audio.playStateChange();
-                this.player.changeState(ITEM_TO_STATE[tile], null, pos.x, pos.y);
+                if (pos) {
+                    this.particles.burstStateChange(pos.x, pos.y, TILE_COLORS[tile].color);
+                    this.audio.playStateChange();
+                }
+                this.player.changeState(ITEM_TO_STATE[tile], null, pos && pos.x, pos && pos.y);
             } else if (tile === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
                 this.level.openDoor(kx, ky);
-                const pos = this.level.gridToPixel(kx, ky);
-                this.particles.burstStateChange(pos.x, pos.y, '#ffffff');
-                this.audio.playStateChange();
-                this.player.changeState(STATE.NORMAL, null, pos.x, pos.y);
+                if (pos) {
+                    this.particles.burstStateChange(pos.x, pos.y, '#ffffff');
+                    this.audio.playStateChange();
+                }
+                this.player.changeState(STATE.NORMAL, null, pos && pos.x, pos && pos.y);
             } else {
                 // Ice kick consumed the ice state
-                const pos = this.level.gridToPixel(kx, ky);
-                this.player.changeState(STATE.NORMAL, null, pos.x, pos.y);
+                this.player.changeState(STATE.NORMAL, null, pos && pos.x, pos && pos.y);
             }
             this._onMoveComplete(kx, ky, null, [], undefined, undefined);
         });
     }
 
     _onMoveComplete(x, y, hitWallType, itemsConsumed, hitWallX, hitWallY) {
-        const pos = this.level.gridToPixel(hitWallX !== undefined ? hitWallX : x, hitWallY !== undefined ? hitWallY : y);
+        const pos = this._gridToPixel(hitWallX !== undefined ? hitWallX : x, hitWallY !== undefined ? hitWallY : y);
 
         if (isWall(hitWallType)) {
-            this.particles.burstWallHit(pos.x, pos.y, hitWallType);
-            this.audio.playHitWall(hitWallType);
+            if (pos) {
+                this.particles.burstWallHit(pos.x, pos.y, hitWallType);
+                this.audio.playHitWall(hitWallType);
+            }
             this.screenShake = 3;
 
             if (hitWallType === TILE.RUBBER_WALL) {
@@ -501,7 +562,7 @@ class Game {
 
             if (hitWallType === TILE.METAL_WALL && this.player.state === STATE.MAGNET) {
                 // Magnet consumed: snapping onto a metal wall resets the state
-                this.player.changeState(STATE.NORMAL, null, pos.x, pos.y);
+                this.player.changeState(STATE.NORMAL, null, pos && pos.x, pos && pos.y);
             }
         }
 
@@ -527,8 +588,8 @@ class Game {
         }
 
         // Celebration effects
-        const pos = this.level.gridToPixel(this.player.gridX, this.player.gridY);
-        this.particles.burstCelebration(pos.x, pos.y);
+        const pos = this._gridToPixel(this.player.gridX, this.player.gridY);
+        if (pos) this.particles.burstCelebration(pos.x, pos.y);
         this.audio.playClear();
     }
 
@@ -707,19 +768,24 @@ class Game {
         // Level grid
         this.level.render(ctx, w, h);
 
-        // Portal particles
-        const portalPos = this.level.gridToPixel(this.level.portalPos.x, this.level.portalPos.y);
-        this.particles.emitPortalSwirl(portalPos.x, portalPos.y, this.time);
+        // Portal particles (only if the portal's own layer is currently in view)
+        const portalPos = this.level.gridToPixelIfVisible(
+            this.level.portalPos.x, this.level.portalPos.y, this.level.portalPos.z);
+        if (portalPos) {
+            this.particles.emitPortalSwirl(portalPos.x, portalPos.y, this.time);
+        }
 
         // Player trail particles (during movement)
         if (this.player.isMoving) {
-            const pPos = this.level.gridToPixel(this.player.visualX, this.player.visualY);
-            if (this.player.state === STATE.ICE) {
-                if (Math.random() < 0.3) {
-                    this.particles.emitIceTrail(pPos.x, pPos.y);
+            const pPos = this._gridToPixel(this.player.visualX, this.player.visualY);
+            if (pPos) {
+                if (this.player.state === STATE.ICE) {
+                    if (Math.random() < 0.3) {
+                        this.particles.emitIceTrail(pPos.x, pPos.y);
+                    }
+                } else {
+                    this.particles.emitTrail(pPos.x, pPos.y, STATE_INFO[this.player.state].color);
                 }
-            } else {
-                this.particles.emitTrail(pPos.x, pPos.y, STATE_INFO[this.player.state].color);
             }
         }
 
@@ -728,8 +794,8 @@ class Game {
             for (let y = 0; y < this.level.height; y++) {
                 for (let x = 0; x < this.level.width; x++) {
                     if (this.level.getTile(x, y) === TILE.ELECTRIC && Math.random() < 0.03) {
-                        const ep = this.level.gridToPixel(x, y);
-                        this.particles.emitSparks(ep.x, ep.y);
+                        const ep = this._gridToPixel(x, y);
+                        if (ep) this.particles.emitSparks(ep.x, ep.y);
                     }
                 }
             }
