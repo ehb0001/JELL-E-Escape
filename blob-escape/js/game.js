@@ -1,0 +1,871 @@
+// ── Main Game ──
+// Game loop, state machine, physics, UI rendering
+
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('game');
+        this.ctx = this.canvas.getContext('2d');
+        this.state = GAME_STATE.TITLE;
+        this.currentLevel = 0;
+        this.unlockedLevels = this._loadProgress();
+
+        // Systems
+        this.level = new Level();
+        this.player = new Player();
+        this.particles = new ParticleSystem(300);
+        this.audio = new Audio();
+        this.input = new Input(this.canvas);
+
+        // UI state
+        this.titleAlpha = 0;
+        this.clearTimer = 0;
+        this.tutorialMsg = '';
+        this.tutorialAlpha = 0;
+        this.screenShake = 0;
+        this.time = 0;
+
+        // Transition
+        this.transitionAlpha = 1;
+        this.transitionTarget = 0;
+
+        this._resize();
+        window.addEventListener('resize', () => this._resize());
+        this.input.onSwipe((dir) => this._onSwipe(dir));
+        this.input.onTap((x, y) => this._handleTap(x, y));
+
+        // Start loop
+        this.lastTime = performance.now();
+        requestAnimationFrame((t) => this._loop(t));
+    }
+
+    // ── Resize ──
+
+    _resize() {
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = window.innerWidth * dpr;
+        this.canvas.height = window.innerHeight * dpr;
+        this.canvas.style.width = window.innerWidth + 'px';
+        this.canvas.style.height = window.innerHeight + 'px';
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+
+        if (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.ANIMATING) {
+            this.level.calculateLayout(this.width, this.height);
+        }
+    }
+
+    // ── Game Loop ──
+
+    _loop(now) {
+        const dt = Math.min(0.1, (now - this.lastTime) / 1000);
+        this.lastTime = now;
+        this.time += dt;
+
+        this._update(dt);
+        this._render();
+
+        requestAnimationFrame((t) => this._loop(t));
+    }
+
+    _update(dt) {
+        // Transition fade
+        if (this.transitionAlpha !== this.transitionTarget) {
+            const dir = this.transitionTarget > this.transitionAlpha ? 1 : -1;
+            this.transitionAlpha += dir * dt * 3;
+            if (dir > 0 && this.transitionAlpha >= this.transitionTarget) this.transitionAlpha = this.transitionTarget;
+            if (dir < 0 && this.transitionAlpha <= this.transitionTarget) this.transitionAlpha = this.transitionTarget;
+        }
+
+        // Screen shake decay
+        if (this.screenShake > 0) {
+            this.screenShake *= 0.9;
+            if (this.screenShake < 0.3) this.screenShake = 0;
+        }
+
+        // Tutorial alpha
+        if (this.tutorialMsg) {
+            this.tutorialAlpha = Math.min(1, this.tutorialAlpha + dt * 2);
+        } else {
+            this.tutorialAlpha = Math.max(0, this.tutorialAlpha - dt * 3);
+        }
+
+        switch (this.state) {
+            case GAME_STATE.TITLE:
+                this.titleAlpha = Math.min(1, this.titleAlpha + dt * 1.5);
+                break;
+
+            case GAME_STATE.PLAYING:
+            case GAME_STATE.ANIMATING:
+                this.level.update(dt);
+                this.player.update(dt);
+                this.particles.update(dt);
+                break;
+
+            case GAME_STATE.LEVEL_CLEAR:
+                this.clearTimer += dt;
+                this.particles.update(dt);
+                this.level.update(dt);
+                break;
+        }
+    }
+
+    // ── Input ──
+
+    _onSwipe(direction) {
+        switch (this.state) {
+            case GAME_STATE.TITLE:
+                this._startLevelSelect();
+                break;
+
+            case GAME_STATE.LEVEL_SELECT:
+                // Handle in click events
+                break;
+
+            case GAME_STATE.PLAYING:
+                this._movePlayer(direction);
+                break;
+
+            case GAME_STATE.LEVEL_CLEAR:
+                if (this.clearTimer > 1) {
+                    this._nextLevel();
+                }
+                break;
+        }
+    }
+
+    // ── State Transitions ──
+
+    _startLevelSelect() {
+        this.state = GAME_STATE.LEVEL_SELECT;
+        this.audio.playButtonClick();
+        this._setupLevelSelectUI();
+    }
+
+    _setupLevelSelectUI() {
+        const overlay = document.getElementById('ui-overlay');
+        overlay.innerHTML = '';
+        overlay.style.display = 'flex';
+
+        const container = document.createElement('div');
+        container.className = 'level-select-container';
+
+        const title = document.createElement('h2');
+        title.textContent = 'Select Stage';
+        title.className = 'level-select-title';
+        container.appendChild(title);
+
+        const grid = document.createElement('div');
+        grid.className = 'level-grid';
+
+        LEVELS_DATA.forEach((lvl, i) => {
+            const btn = document.createElement('button');
+            const unlocked = i <= this.unlockedLevels;
+            btn.className = `level-btn ${unlocked ? 'unlocked' : 'locked'}`;
+            btn.innerHTML = unlocked
+                ? `<span class="level-num">${lvl.id}</span><span class="level-name">${lvl.name}</span>`
+                : `<span class="level-num">🔒</span><span class="level-name">Locked</span>`;
+            if (unlocked) {
+                btn.addEventListener('click', () => {
+                    this.audio.playButtonClick();
+                    overlay.style.display = 'none';
+                    this._loadLevel(i);
+                });
+            }
+            grid.appendChild(btn);
+        });
+
+        container.appendChild(grid);
+        overlay.appendChild(container);
+    }
+
+    _loadLevel(index) {
+        this.currentLevel = index;
+        this.level.load(index);
+        this.level.calculateLayout(this.width, this.height);
+        this.player.reset(this.level.playerStart.x, this.level.playerStart.y);
+        this.state = GAME_STATE.PLAYING;
+        this.transitionAlpha = 1;
+        this.transitionTarget = 0;
+
+        // Tutorial messages
+        const messages = [
+            'Swipe to slide JELL-E!',
+            'Hit the Metal wall to gain Magnet power!',
+            'Hit the Glass wall to gain Slippery power!',
+            'Hit the Rubber wall to gain Bouncy power!',
+            'Hit the Electric wall to gain Electric power!',
+        ];
+        this.tutorialMsg = messages[index] || '';
+        setTimeout(() => { this.tutorialMsg = ''; }, 4000);
+    }
+
+    _nextLevel() {
+        if (this.currentLevel + 1 < LEVELS_DATA.length) {
+            this._loadLevel(this.currentLevel + 1);
+        } else {
+            // All levels complete!
+            this.state = GAME_STATE.LEVEL_SELECT;
+            this._setupLevelSelectUI();
+            document.getElementById('ui-overlay').style.display = 'flex';
+        }
+    }
+
+    // ── Physics / Movement ──
+
+    _movePlayer(direction) {
+        if (this.player.isMoving) return;
+
+        const dir = DIR[direction];
+        if (!dir) return;
+
+        if (this.iceKickWait) {
+            this._resolveIceKick(direction);
+            return;
+        }
+
+        let x = this.player.gridX;
+        let y = this.player.gridY;
+        let hitWallType = null;
+        let hitWallX = undefined;
+        let hitWallY = undefined;
+        let moved = false;
+        const perpDirX = dir.y;
+        const perpDirY = dir.x;
+
+        while (true) {
+            const nx = x + dir.x;
+            const ny = y + dir.y;
+            const tile = this.level.getTile(nx, ny);
+
+            if (tile === TILE.PORTAL) {
+                x = nx;
+                y = ny;
+                moved = true;
+                break;
+            }
+
+            if (tile === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
+                // If sliding through an electric door with electric state, we do NOT stop
+                // But we will handle opening it in the secondary move callback
+            } else if (isBlocking(tile, this.player.state)) {
+                hitWallType = tile;
+                hitWallX = nx;
+                hitWallY = ny;
+                break;
+            }
+
+            x = nx;
+            y = ny;
+            moved = true;
+
+            // Magnet: stop if a metal wall is right beside the tile just entered
+            if (this.player.state === STATE.MAGNET) {
+                const side1x = x + perpDirX, side1y = y + perpDirY;
+                const side2x = x - perpDirX, side2y = y - perpDirY;
+                if (this.level.getTile(side1x, side1y) === TILE.METAL_WALL) {
+                    hitWallType = TILE.METAL_WALL;
+                    hitWallX = side1x;
+                    hitWallY = side1y;
+                    break;
+                }
+                if (this.level.getTile(side2x, side2y) === TILE.METAL_WALL) {
+                    hitWallType = TILE.METAL_WALL;
+                    hitWallX = side2x;
+                    hitWallY = side2y;
+                    break;
+                }
+            }
+        }
+
+        let itemsConsumed = [];
+        let ix = this.player.gridX;
+        let iy = this.player.gridY;
+        let tempState = this.player.state;
+
+        while(ix !== x || iy !== y) {
+            ix += dir.x;
+            iy += dir.y;
+            const iTile = this.level.getTile(ix, iy);
+            if (isItem(iTile) && itemsConsumed.length === 0) {
+                itemsConsumed.push({x: ix, y: iy, type: iTile});
+                tempState = ITEM_TO_STATE[iTile];
+            }
+        }
+        
+        let bounceX = x;
+        let bounceY = y;
+
+        const pendingIceKick = hitWallType !== null && tempState === STATE.ICE;
+
+        if (hitWallType === TILE.RUBBER_WALL) {
+            const backDirX = -dir.x;
+            const backDirY = -dir.y;
+            let bounces = 0;
+            while(bounces < 2) {
+                const bx = bounceX + backDirX;
+                const by = bounceY + backDirY;
+                if(isBlocking(this.level.getTile(bx, by), tempState) || 
+                   (bx === this.player.gridX && by === this.player.gridY)) {
+                    break;
+                }
+                bounceX = bx;
+                bounceY = by;
+                bounces++;
+            }
+        }
+
+        if (!moved) return;
+
+        this.audio.playMove();
+        this.state = GAME_STATE.ANIMATING;
+        this.input.disable();
+
+        if (this.player.moveCount === 0) this.tutorialMsg = '';
+        this.player.moveCount++;
+
+        let finalX = bounceX;
+        let finalY = bounceY;
+
+        const finishMove = () => {
+             this._onMoveComplete(finalX, finalY, hitWallType, itemsConsumed, hitWallX, hitWallY);
+        };
+
+        const doSecondaryMove = () => {
+             itemsConsumed.forEach(item => {
+                 this.level.consumeItem(item.x, item.y);
+                 const pos = this.level.gridToPixel(item.x, item.y);
+                 this.particles.burstStateChange(pos.x, pos.y, TILE_COLORS[item.type].color);
+                 this.audio.playStateChange();
+                 this.player.changeState(ITEM_TO_STATE[item.type], null, pos.x, pos.y);
+             });
+
+             // Check if we passed through any electric doors in the primary move
+             let origX = this.player.gridX;
+             let origY = this.player.gridY;
+             let dpx = Math.sign(x - origX);
+             let dpy = Math.sign(y - origY);
+             if (dpx !== 0 || dpy !== 0) {
+                 let currX = origX;
+                 let currY = origY;
+                 while(currX !== x || currY !== y) {
+                     currX += dpx;
+                     currY += dpy;
+                     if (this.level.getTile(currX, currY) === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
+                         this.level.openDoor(currX, currY);
+                         const pos = this.level.gridToPixel(currX, currY);
+                         this.particles.burstStateChange(pos.x, pos.y, '#ffffff');
+                         this.audio.playStateChange();
+                         this.player.changeState(STATE.NORMAL, null, pos.x, pos.y);
+                     }
+                 }
+             }
+
+             // Check if we passed through any electric doors in the secondary (bounce) move
+             let px = x;
+             let py = y;
+             let tx = bounceX;
+             let ty = bounceY;
+             let dx = Math.sign(tx - px);
+             let dy = Math.sign(ty - py);
+             if (dx !== 0 || dy !== 0) {
+                 let currX = px;
+                 let currY = py;
+                 while(currX !== tx || currY !== ty) {
+                     currX += dx;
+                     currY += dy;
+                     if (this.level.getTile(currX, currY) === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
+                         this.level.openDoor(currX, currY);
+                         const pos = this.level.gridToPixel(currX, currY);
+                         this.particles.burstStateChange(pos.x, pos.y, '#ffffff');
+                         this.audio.playStateChange();
+                         this.player.changeState(STATE.NORMAL, null, pos.x, pos.y);
+                     }
+                 }
+             }
+
+             if (bounceX !== x || bounceY !== y) {
+                 const backDirName = (direction === 'up' ? 'down' : direction === 'down' ? 'up' : direction === 'left' ? 'right' : 'left');
+                 this.player.startMove(backDirName, bounceX, bounceY, finishMove);
+             } else if (pendingIceKick) {
+                 this._enterIceKickWait(x, y, direction);
+             } else {
+                 finishMove();
+             }
+        };
+
+        this.player.startMove(direction, x, y, doSecondaryMove);
+    }
+
+    // ── Ice kick (post-slide direction choice) ──
+
+    _enterIceKickWait(x, y, incomingDirection) {
+        this.player.gridX = x;
+        this.player.gridY = y;
+        this.player.visualX = x;
+        this.player.visualY = y;
+        this.player.isMoving = false;
+        this.state = GAME_STATE.PLAYING;
+        this.input.enable();
+        this.iceKickWait = { x, y, incomingDirection };
+    }
+
+    _resolveIceKick(direction) {
+        const wait = this.iceKickWait;
+        const dir = DIR[direction];
+        const inDir = DIR[wait.incomingDirection];
+
+        // Ignore the direction we were traveling and its opposite; only perpendicular kicks resolve the wait.
+        const isPerpendicular = (dir.x !== 0) !== (inDir.x !== 0);
+        if (!isPerpendicular) return;
+
+        this.iceKickWait = null;
+
+        const kx = wait.x + dir.x;
+        const ky = wait.y + dir.y;
+        const tile = this.level.getTile(kx, ky);
+
+        if (isBlocking(tile, this.player.state)) {
+            const pos = this.level.gridToPixel(kx, ky);
+            this.particles.burstWallHit(pos.x, pos.y, tile);
+            this.audio.playHitWall(tile);
+            this.screenShake = 3;
+            if (tile === TILE.RUBBER_WALL) this.level.triggerRubberBounce(kx, ky);
+            return;
+        }
+
+        this.audio.playMove();
+        this.state = GAME_STATE.ANIMATING;
+        this.input.disable();
+
+        this.player.startMove(direction, kx, ky, () => {
+            if (isItem(tile)) {
+                this.level.consumeItem(kx, ky);
+                const pos = this.level.gridToPixel(kx, ky);
+                this.particles.burstStateChange(pos.x, pos.y, TILE_COLORS[tile].color);
+                this.audio.playStateChange();
+                this.player.changeState(ITEM_TO_STATE[tile], null, pos.x, pos.y);
+            }
+            if (tile === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
+                this.level.openDoor(kx, ky);
+                const pos = this.level.gridToPixel(kx, ky);
+                this.particles.burstStateChange(pos.x, pos.y, '#ffffff');
+                this.audio.playStateChange();
+                this.player.changeState(STATE.NORMAL, null, pos.x, pos.y);
+            }
+            this._onMoveComplete(kx, ky, null, [], undefined, undefined);
+        });
+    }
+
+    _onMoveComplete(x, y, hitWallType, itemsConsumed, hitWallX, hitWallY) {
+        const pos = this.level.gridToPixel(hitWallX !== undefined ? hitWallX : x, hitWallY !== undefined ? hitWallY : y);
+
+        if (isWall(hitWallType)) {
+            this.particles.burstWallHit(pos.x, pos.y, hitWallType);
+            this.audio.playHitWall(hitWallType);
+            this.screenShake = 3;
+            
+            if (hitWallType === TILE.RUBBER_WALL) {
+                this.level.triggerRubberBounce(hitWallX, hitWallY);
+            }
+        }
+
+        const currentTile = this.level.grid[y]?.[x];
+        if (currentTile === TILE.PORTAL) {
+            this._levelClear();
+            return;
+        }
+
+        this.state = GAME_STATE.PLAYING;
+        this.input.enable();
+    }
+
+    _levelClear() {
+        this.state = GAME_STATE.LEVEL_CLEAR;
+        this.clearTimer = 0;
+        this.input.enable();
+
+        // Update progress
+        if (this.currentLevel >= this.unlockedLevels) {
+            this.unlockedLevels = this.currentLevel + 1;
+            this._saveProgress();
+        }
+
+        // Celebration effects
+        const pos = this.level.gridToPixel(this.player.gridX, this.player.gridY);
+        this.particles.burstCelebration(pos.x, pos.y);
+        this.audio.playClear();
+    }
+
+    _restartLevel() {
+        this.audio.playRestart();
+        this._loadLevel(this.currentLevel);
+    }
+
+    // ── Save/Load ──
+
+    _saveProgress() {
+        try {
+            localStorage.setItem('jelle_progress', JSON.stringify(this.unlockedLevels));
+        } catch (e) { /* ignore */ }
+    }
+
+    _loadProgress() {
+        // Unlock all levels for easy access and verification
+        return 29;
+    }
+
+    // ── Rendering ──
+
+    _render() {
+        const ctx = this.ctx;
+        const w = this.width;
+        const h = this.height;
+
+        ctx.save();
+
+        // Screen shake
+        if (this.screenShake > 0) {
+            const sx = (Math.random() - 0.5) * this.screenShake;
+            const sy = (Math.random() - 0.5) * this.screenShake;
+            ctx.translate(sx, sy);
+        }
+
+        switch (this.state) {
+            case GAME_STATE.TITLE:
+                this._renderTitle(ctx, w, h);
+                break;
+
+            case GAME_STATE.LEVEL_SELECT:
+                this._renderLevelSelectBg(ctx, w, h);
+                break;
+
+            case GAME_STATE.PLAYING:
+            case GAME_STATE.ANIMATING:
+                this._renderGame(ctx, w, h);
+                break;
+
+            case GAME_STATE.LEVEL_CLEAR:
+                this._renderGame(ctx, w, h);
+                this._renderClearOverlay(ctx, w, h);
+                break;
+        }
+
+        // Transition overlay
+        if (this.transitionAlpha > 0.01) {
+            ctx.fillStyle = `rgba(10,10,26,${this.transitionAlpha})`;
+            ctx.fillRect(0, 0, w, h);
+        }
+
+        ctx.restore();
+    }
+
+    _renderTitle(ctx, w, h) {
+        // Background
+        ctx.fillStyle = '#0a0a1a';
+        ctx.fillRect(0, 0, w, h);
+
+        // Animated background particles
+        for (let i = 0; i < 30; i++) {
+            const x = (Math.sin(this.time * 0.3 + i * 2.1) * 0.5 + 0.5) * w;
+            const y = (Math.cos(this.time * 0.2 + i * 1.7) * 0.5 + 0.5) * h;
+            const alpha = 0.1 + Math.sin(this.time + i) * 0.05;
+            const size = 2 + Math.sin(this.time * 0.5 + i) * 1;
+            ctx.fillStyle = `rgba(105,240,174,${alpha})`;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.globalAlpha = this.titleAlpha;
+
+        // Title
+        ctx.save();
+        ctx.shadowColor = '#69F0AE';
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = '#69F0AE';
+        ctx.font = 'bold 42px "Orbitron", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('JELL-E', w / 2, h * 0.32);
+        ctx.restore();
+
+        // Subtitle
+        ctx.fillStyle = '#8888aa';
+        ctx.font = '16px "Orbitron", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Escape the Lab', w / 2, h * 0.40);
+
+        // Jelly character preview
+        this._renderTitleJelly(ctx, w / 2, h * 0.55);
+
+        // Tap prompt
+        const promptAlpha = 0.4 + Math.sin(this.time * 2) * 0.3;
+        ctx.globalAlpha = this.titleAlpha * promptAlpha;
+        ctx.fillStyle = '#aaaacc';
+        ctx.font = '14px "Orbitron", sans-serif';
+        ctx.fillText('Tap anywhere to start', w / 2, h * 0.78);
+
+        ctx.globalAlpha = 1;
+    }
+
+    _renderTitleJelly(ctx, x, y) {
+        const r = 35;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(1 + Math.sin(this.time * 3) * 0.05, 1 - Math.sin(this.time * 3) * 0.05);
+
+        // Glow
+        ctx.shadowColor = '#69F0AE';
+        ctx.shadowBlur = 25;
+
+        // Body
+        ctx.fillStyle = 'rgba(105,240,174,0.7)';
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.beginPath();
+        ctx.ellipse(-5, -8, r * 0.4, r * 0.3, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+
+        // Eyes
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(-10, -5, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(10, -5, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath(); ctx.arc(-10 + Math.sin(this.time) * 2, -5, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(10 + Math.sin(this.time) * 2, -5, 4, 0, Math.PI * 2); ctx.fill();
+
+        // Mouth
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 5, 6, 0, Math.PI);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    _renderLevelSelectBg(ctx, w, h) {
+        ctx.fillStyle = '#0a0a1a';
+        ctx.fillRect(0, 0, w, h);
+
+        // Subtle grid pattern
+        ctx.strokeStyle = 'rgba(40,40,80,0.3)';
+        ctx.lineWidth = 1;
+        const gridSize = 40;
+        for (let x = 0; x < w; x += gridSize) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+        }
+        for (let y = 0; y < h; y += gridSize) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        }
+    }
+
+    _renderGame(ctx, w, h) {
+        // Level grid
+        this.level.render(ctx, w, h);
+
+        // Portal particles
+        const portalPos = this.level.gridToPixel(this.level.portalPos.x, this.level.portalPos.y);
+        this.particles.emitPortalSwirl(portalPos.x, portalPos.y, this.time);
+
+        // Player trail particles (during movement)
+        if (this.player.isMoving) {
+            const pPos = this.level.gridToPixel(this.player.visualX, this.player.visualY);
+            if (this.player.state === STATE.ICE) {
+                if (Math.random() < 0.3) {
+                    this.particles.emitIceTrail(pPos.x, pPos.y);
+                }
+            } else {
+                this.particles.emitTrail(pPos.x, pPos.y, STATE_INFO[this.player.state].color);
+            }
+        }
+
+        // Electric wall sparks
+        if (Math.random() < 0.3) {
+            for (let y = 0; y < this.level.height; y++) {
+                for (let x = 0; x < this.level.width; x++) {
+                    if (this.level.grid[y][x] === TILE.ELECTRIC && Math.random() < 0.03) {
+                        const ep = this.level.gridToPixel(x, y);
+                        this.particles.emitSparks(ep.x, ep.y);
+                    }
+                }
+            }
+        }
+
+        // Particles
+        this.particles.render(ctx);
+
+        // Player
+        this.player.render(ctx, this.level);
+
+        // HUD
+        this._renderHUD(ctx, w);
+
+        // Tutorial
+        if (this.tutorialAlpha > 0.01) {
+            ctx.globalAlpha = this.tutorialAlpha * 0.9;
+            ctx.fillStyle = 'rgba(10,10,26,0.7)';
+            const tw = ctx.measureText(this.tutorialMsg).width + 40;
+
+            ctx.font = '13px "Orbitron", sans-serif';
+            const textW = ctx.measureText(this.tutorialMsg).width + 40;
+            const tx = (w - textW) / 2;
+            const ty = this.height - 70;
+
+            this._roundRect(ctx, tx, ty, textW, 36, 18);
+            ctx.fill();
+
+            ctx.fillStyle = '#ccc';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.tutorialMsg, w / 2, ty + 18);
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    _renderHUD(ctx, w) {
+        const y = 8;
+        const h = 52;
+
+        // Background bar
+        ctx.fillStyle = 'rgba(10,10,26,0.85)';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(105,240,174,0.08)';
+        ctx.fillRect(0, h - 1, w, 1);
+
+        // Level name
+        ctx.fillStyle = '#8888aa';
+        ctx.font = '11px "Orbitron", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`Stage ${this.level.levelData.id}`, w / 2, y + 2);
+
+        ctx.fillStyle = '#ccc';
+        ctx.font = '13px "Orbitron", sans-serif';
+        ctx.fillText(this.level.levelData.name, w / 2, y + 17);
+
+        // State indicator (left)
+        const stateInfo = STATE_INFO[this.player.state];
+        ctx.fillStyle = stateInfo.color;
+        ctx.font = '20px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(stateInfo.icon, 12, y + 8);
+
+        ctx.fillStyle = stateInfo.color;
+        ctx.font = '11px "Orbitron", sans-serif';
+        ctx.fillText(stateInfo.name, 38, y + 14);
+
+        // Move counter (right)
+        ctx.fillStyle = '#8888aa';
+        ctx.font = '11px "Orbitron", sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`Moves: ${this.player.moveCount}`, w - 60, y + 14);
+
+        // Restart button
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        this._roundRect(ctx, w - 48, y + 4, 38, 28, 6);
+        ctx.fill();
+        ctx.fillStyle = '#aaa';
+        ctx.font = '16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('↺', w - 29, y + 18);
+    }
+
+    _handleTap(clientX, clientY) {
+        const rect = this.canvas.getBoundingClientRect();
+        const cx = clientX - rect.left;
+        const cy = clientY - rect.top;
+
+        if (this.state === GAME_STATE.TITLE) {
+            this._startLevelSelect();
+            return;
+        }
+
+        const w = this.width;
+        const y = 8;
+        const h = 52;
+
+        // Restart button
+        if (cx > w - 48 && cx < w - 10 && cy > y + 4 && cy < y + 32 &&
+            (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.ANIMATING)) {
+            this._restartLevel();
+            return;
+        }
+
+        // Back to level select (tap level name area)
+        if (cx > w * 0.3 && cx < w * 0.7 && cy < h &&
+            (this.state === GAME_STATE.PLAYING)) {
+            this.state = GAME_STATE.LEVEL_SELECT;
+            this._setupLevelSelectUI();
+            document.getElementById('ui-overlay').style.display = 'flex';
+        }
+    }
+
+    _renderClearOverlay(ctx, w, h) {
+        const alpha = Math.min(1, this.clearTimer * 2);
+        ctx.globalAlpha = alpha;
+
+        // Dark overlay
+        ctx.fillStyle = 'rgba(10,10,26,0.6)';
+        ctx.fillRect(0, 0, w, h);
+
+        // Clear message
+        const centerY = h * 0.4;
+
+        ctx.save();
+        ctx.shadowColor = '#FFD54F';
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = '#FFD54F';
+        ctx.font = 'bold 32px "Orbitron", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Stage Clear!', w / 2, centerY);
+        ctx.restore();
+
+        ctx.fillStyle = '#aaa';
+        ctx.font = '16px "Orbitron", sans-serif';
+        ctx.fillText(`Moves: ${this.player.moveCount}`, w / 2, centerY + 45);
+
+        // Next prompt
+        if (this.clearTimer > 1) {
+            const promptAlpha = 0.5 + Math.sin(this.time * 3) * 0.3;
+            ctx.globalAlpha = alpha * promptAlpha;
+            ctx.fillStyle = '#aaaacc';
+            ctx.font = '14px "Orbitron", sans-serif';
+
+            const hasNext = this.currentLevel + 1 < LEVELS_DATA.length;
+            ctx.fillText(hasNext ? 'Swipe for next stage' : 'All stages cleared! Swipe to return.', w / 2, centerY + 90);
+        }
+
+        ctx.globalAlpha = 1;
+    }
+
+    _roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+    }
+}
+
+// ── Initialize ──
+window.addEventListener('DOMContentLoaded', async () => {
+    await loadAllLevels();
+    new Game();
+});
