@@ -445,12 +445,15 @@ class Game {
                 this.particles.burstStateChange(pos.x, pos.y, TILE_COLORS[tile].color);
                 this.audio.playStateChange();
                 this.player.changeState(ITEM_TO_STATE[tile], null, pos.x, pos.y);
-            }
-            if (tile === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
+            } else if (tile === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
                 this.level.openDoor(kx, ky);
                 const pos = this.level.gridToPixel(kx, ky);
                 this.particles.burstStateChange(pos.x, pos.y, '#ffffff');
                 this.audio.playStateChange();
+                this.player.changeState(STATE.NORMAL, null, pos.x, pos.y);
+            } else {
+                // Ice kick consumed the ice state
+                const pos = this.level.gridToPixel(kx, ky);
                 this.player.changeState(STATE.NORMAL, null, pos.x, pos.y);
             }
             this._onMoveComplete(kx, ky, null, [], undefined, undefined);
@@ -464,9 +467,14 @@ class Game {
             this.particles.burstWallHit(pos.x, pos.y, hitWallType);
             this.audio.playHitWall(hitWallType);
             this.screenShake = 3;
-            
+
             if (hitWallType === TILE.RUBBER_WALL) {
                 this.level.triggerRubberBounce(hitWallX, hitWallY);
+            }
+
+            if (hitWallType === TILE.METAL_WALL && this.player.state === STATE.MAGNET) {
+                // Magnet consumed: snapping onto a metal wall resets the state
+                this.player.changeState(STATE.NORMAL, null, pos.x, pos.y);
             }
         }
 

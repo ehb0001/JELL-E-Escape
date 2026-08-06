@@ -1,4 +1,4 @@
-# JELL-E: Escape the Lab
+# JELL-E: Escape the Lab 
 
 바닐라 JS + Canvas 2D로 만든 모바일 퍼즐 게임. 젤리 캐릭터를 스와이프로 밀어서 그리드를 이동하며, 특정 벽에 부딪히면 파워(상태)를 얻어 다른 장애물을 넘고 포탈에 도달하면 스테이지 클리어.
 
