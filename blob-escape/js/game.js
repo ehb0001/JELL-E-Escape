@@ -478,7 +478,7 @@ class Game {
             }
         }
 
-        const currentTile = this.level.grid[y]?.[x];
+        const currentTile = this.level.getTile(x, y);
         if (currentTile === TILE.PORTAL) {
             this._levelClear();
             return;
@@ -700,7 +700,7 @@ class Game {
         if (Math.random() < 0.3) {
             for (let y = 0; y < this.level.height; y++) {
                 for (let x = 0; x < this.level.width; x++) {
-                    if (this.level.grid[y][x] === TILE.ELECTRIC && Math.random() < 0.03) {
+                    if (this.level.getTile(x, y) === TILE.ELECTRIC && Math.random() < 0.03) {
                         const ep = this.level.gridToPixel(x, y);
                         this.particles.emitSparks(ep.x, ep.y);
                     }
@@ -875,5 +875,5 @@ class Game {
 // ── Initialize ──
 window.addEventListener('DOMContentLoaded', async () => {
     await loadAllLevels();
-    new Game();
+    window.game = new Game();
 });

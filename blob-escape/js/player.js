@@ -283,17 +283,17 @@ class Player {
                 let mx = null, my = null, dist = Infinity;
                 for (let yy = 0; yy < level.height; yy++) {
                     for (let xx = 0; xx < level.width; xx++) {
-                        if (level.grid[yy][xx] === TILE.METAL_WALL) {
+                        if (level.getTile(xx, yy) === TILE.METAL_WALL) {
                             if (xx === this.gridX || yy === this.gridY) {
                                 let clear = true;
                                 if (xx === this.gridX) {
                                     const minY = Math.min(yy, this.gridY);
                                     const maxY = Math.max(yy, this.gridY);
-                                    for(let j=minY+1; j<maxY; j++) if(isBlocking(level.grid[j][xx], this.state)) clear = false;
+                                    for(let j=minY+1; j<maxY; j++) if(isBlocking(level.getTile(xx, j), this.state)) clear = false;
                                 } else {
                                     const minX = Math.min(xx, this.gridX);
                                     const maxX = Math.max(xx, this.gridX);
-                                    for(let j=minX+1; j<maxX; j++) if(isBlocking(level.grid[this.gridY][j], this.state)) clear = false;
+                                    for(let j=minX+1; j<maxX; j++) if(isBlocking(level.getTile(j, this.gridY), this.state)) clear = false;
                                 }
                                 if (clear) {
                                     const d = Math.abs(xx - this.gridX) + Math.abs(yy - this.gridY);

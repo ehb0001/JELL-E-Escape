@@ -6,12 +6,12 @@
 const LEVELS_DATA = [];
 
 async function loadAllLevels() {
-    const manifestRes = await fetch('levels/manifest.json');
+    const manifestRes = await fetch('levels/manifest.json', { cache: 'no-store' });
     const manifest = await manifestRes.json();
 
     const levels = await Promise.all(
         manifest.map(async (fname) => {
-            const res = await fetch(`levels/${fname}`);
+            const res = await fetch(`levels/${fname}`, { cache: 'no-store' });
             return res.json();
         })
     );
@@ -24,21 +24,29 @@ async function loadAllLevels() {
 
 class Level {
     constructor() {
-        this.grid = [];
-        this.width = 0;
-        this.height = 0;
-        this.playerStart = { x: 0, y: 0 };
-        this.portalPos = { x: 0, y: 0 };
-        this.consumedItems = new Set(); // Track consumed items by "x,y"
+        this.grid = [];       // grid[z][y][x]
+        this.width = 0;       // X extent
+        this.height = 0;      // Y extent
+        this.depth = 0;       // Z extent (number of layers)
+        this.playerStart = { x: 0, y: 0, z: 0 };
+        this.portalPos = { x: 0, y: 0, z: 0 };
+        this.consumedItems = new Set(); // Track consumed items by "x,y,z"
         this.openedDoors = new Set();
         this.levelData = null;
         this.tileSize = 0;
         this.offsetX = 0;
         this.offsetY = 0;
         this.time = 0;
-        
+
+        // View: which axis is fixed to slice the 3D grid into a 2D plane.
+        // 'z' (default) shows the X-Y plane at layer viewZ (today's view).
+        // 'x' shows the Z-Y plane at column viewX.
+        this.viewAxis = 'z';
+        this.viewZ = 0;
+        this.viewX = 0;
+
         // Effects state
-        this.rubberHitMap = new Map(); // "x,y" -> timer
+        this.rubberHitMap = new Map(); // "x,y,z" -> timer
     }
 
     load(levelIndex) {
@@ -49,27 +57,62 @@ class Level {
         this.consumedItems = new Set();
         this.openedDoors = new Set();
         this.rubberHitMap.clear();
-        this.height = data.map.length;
-        // Find the max width across all rows
+
+        const layers = data.map;
+        this.depth = layers.length;
+        this.height = 0;
         this.width = 0;
-        for (let row of data.map) {
-            if (row.length > this.width) this.width = row.length;
-        }
-        this.grid = [];
-
-        for (let y = 0; y < this.height; y++) {
-            const row = [];
-            for (let x = 0; x < this.width; x++) {
-                const ch = x < data.map[y].length ? data.map[y][x] : ' ';
-                const tile = CHAR_TO_TILE[ch] !== undefined ? CHAR_TO_TILE[ch] : TILE.FLOOR;
-                row.push(tile);
-
-                if (ch === 'P') this.playerStart = { x, y };
-                if (ch === 'X') this.portalPos = { x, y };
+        for (const layer of layers) {
+            if (layer.length > this.height) this.height = layer.length;
+            for (const row of layer) {
+                if (row.length > this.width) this.width = row.length;
             }
-            this.grid.push(row);
         }
+
+        this.grid = [];
+        for (let z = 0; z < this.depth; z++) {
+            const layer = layers[z];
+            const grid2d = [];
+            for (let y = 0; y < this.height; y++) {
+                const row = [];
+                const srcRow = y < layer.length ? layer[y] : '';
+                for (let x = 0; x < this.width; x++) {
+                    const ch = x < srcRow.length ? srcRow[x] : ' ';
+                    const tile = CHAR_TO_TILE[ch] !== undefined ? CHAR_TO_TILE[ch] : TILE.FLOOR;
+                    row.push(tile);
+
+                    if (ch === 'P') this.playerStart = { x, y, z };
+                    if (ch === 'X') this.portalPos = { x, y, z };
+                }
+                grid2d.push(row);
+            }
+            this.grid.push(grid2d);
+        }
+
+        this.viewAxis = 'z';
+        this.viewZ = this.playerStart.z;
+        this.viewX = this.playerStart.x;
         return true;
+    }
+
+    // ── View (axis) control ──
+
+    setView(axis, index) {
+        this.viewAxis = axis;
+        if (axis === 'z') this.viewZ = index;
+        else if (axis === 'x') this.viewX = index;
+    }
+
+    // Dimensions of the currently visible 2D plane, in (col, row) terms.
+    getViewDimensions() {
+        if (this.viewAxis === 'x') return { cols: this.height, rows: this.depth };
+        return { cols: this.width, rows: this.height };
+    }
+
+    // Map a point on the current 2D plane (col, row) to full 3D grid coords.
+    viewToGrid(col, row) {
+        if (this.viewAxis === 'x') return { x: this.viewX, y: col, z: row };
+        return { x: col, y: row, z: this.viewZ };
     }
 
     calculateLayout(canvasWidth, canvasHeight) {
@@ -77,31 +120,35 @@ class Level {
         const padding = 15;
         const availW = canvasWidth - padding * 2;
         const availH = canvasHeight - hudHeight - padding * 2;
-        this.tileSize = Math.floor(Math.min(availW / this.width, availH / this.height));
-        this.offsetX = Math.floor((canvasWidth - this.tileSize * this.width) / 2);
-        this.offsetY = hudHeight + Math.floor((canvasHeight - hudHeight - this.tileSize * this.height) / 2);
+        const { cols, rows } = this.getViewDimensions();
+        this.tileSize = Math.floor(Math.min(availW / cols, availH / rows));
+        this.offsetX = Math.floor((canvasWidth - this.tileSize * cols) / 2);
+        this.offsetY = hudHeight + Math.floor((canvasHeight - hudHeight - this.tileSize * rows) / 2);
     }
 
-    getTile(x, y) {
-        if (x < 0 || y < 0 || x >= this.width || y >= this.height) return TILE.WALL;
-        if (this.openedDoors.has(`${x},${y}`)) return TILE.FLOOR;
-        if (this.consumedItems.has(`${x},${y}`)) return TILE.FLOOR;
-        return this.grid[y][x];
+    getTile(x, y, z = this.viewZ) {
+        if (x < 0 || y < 0 || z < 0 || x >= this.width || y >= this.height || z >= this.depth) return TILE.WALL;
+        const key = `${x},${y},${z}`;
+        if (this.openedDoors.has(key)) return TILE.FLOOR;
+        if (this.consumedItems.has(key)) return TILE.FLOOR;
+        return this.grid[z][y][x];
     }
 
-    consumeItem(x, y) {
-        this.consumedItems.add(`${x},${y}`);
+    consumeItem(x, y, z = this.viewZ) {
+        this.consumedItems.add(`${x},${y},${z}`);
     }
 
-    openDoor(x, y) {
-        this.openedDoors.add(`${x},${y}`);
+    openDoor(x, y, z = this.viewZ) {
+        this.openedDoors.add(`${x},${y},${z}`);
     }
 
-    triggerRubberBounce(x, y) {
-        this.rubberHitMap.set(`${x},${y}`, 0.4); // 0.4s animation
+    triggerRubberBounce(x, y, z = this.viewZ) {
+        this.rubberHitMap.set(`${x},${y},${z}`, 0.4); // 0.4s animation
     }
 
     gridToPixel(gx, gy) {
+        // gx, gy here are coordinates on the current 2D view plane (col, row),
+        // matching the historical (x, y) call sites.
         return {
             x: this.offsetX + gx * this.tileSize + this.tileSize / 2,
             y: this.offsetY + gy * this.tileSize + this.tileSize / 2,
@@ -110,7 +157,7 @@ class Level {
 
     update(dt) {
         this.time += dt;
-        
+
         // Update rubber hits
         for (const [key, time] of this.rubberHitMap.entries()) {
             if (time <= dt) {
@@ -125,17 +172,19 @@ class Level {
         ctx.fillStyle = '#0a0a1a';
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-        for (let y = 0; y < this.height; y++) {
-            for (let x = 0; x < this.width; x++) {
-                const tile = this.getTile(x, y);
-                const px = this.offsetX + x * this.tileSize;
-                const py = this.offsetY + y * this.tileSize;
-                this._renderTile(ctx, tile, px, py, this.tileSize, x, y);
+        const { cols, rows } = this.getViewDimensions();
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const g = this.viewToGrid(col, row);
+                const tile = this.getTile(g.x, g.y, g.z);
+                const px = this.offsetX + col * this.tileSize;
+                const py = this.offsetY + row * this.tileSize;
+                this._renderTile(ctx, tile, px, py, this.tileSize, g.x, g.y, g.z);
             }
         }
     }
 
-    _renderTile(ctx, tile, px, py, s, gx, gy) {
+    _renderTile(ctx, tile, px, py, s, gx, gy, gz = this.viewZ) {
         const gap = 1;
         const innerX = px + gap;
         const innerY = py + gap;
@@ -178,7 +227,7 @@ class Level {
 
             case TILE.RUBBER_WALL: {
                 let scale = 1.0;
-                const hitTime = this.rubberHitMap.get(`${gx},${gy}`);
+                const hitTime = this.rubberHitMap.get(`${gx},${gy},${gz}`);
                 if (hitTime !== undefined) {
                     // Squash and stretch
                     const t = 1 - (hitTime / 0.4);
