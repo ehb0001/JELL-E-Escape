@@ -130,12 +130,15 @@ class Level {
 
     // Inverse of viewToGrid: map full 3D grid coords to the current 2D plane (col, row).
     // Returns null if (x,y,z) isn't on the plane currently being viewed.
+    // x/y/z may be fractional (mid-animation); only the axis that is fixed for
+    // the current view is checked against the view's slice (rounded), so
+    // movement animations along the two free axes stay smooth.
     gridToView(x, y, z) {
         if (this.viewAxis === 'x') {
-            if (x !== this.viewX) return null;
+            if (Math.round(x) !== this.viewX) return null;
             return { col: this.depth - 1 - z, row: y };
         }
-        if (z !== this.viewZ) return null;
+        if (Math.round(z) !== this.viewZ) return null;
         return { col: x, row: y };
     }
 
@@ -160,7 +163,6 @@ class Level {
     getTile(x, y, z = this.viewZ) {
         if (x < 0 || y < 0 || z < 0 || x >= this.width || y >= this.height || z >= this.depth) return TILE.WALL;
         const key = `${x},${y},${z}`;
-        if (this.openedDoors.has(key)) return TILE.FLOOR;
         if (this.consumedItems.has(key)) return TILE.FLOOR;
         return this.grid[z][y][x];
     }

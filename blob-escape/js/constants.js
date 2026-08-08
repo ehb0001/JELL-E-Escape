@@ -75,6 +75,24 @@ const DIR = {
     left:  { x: -1, y:  0 }, right: { x:  1, y:  0 },
 };
 
+// Screen-space swipe directions -> 3D grid delta, per view axis.
+// 'z' view (X-Y plane, default): up/down move Y, left/right move X.
+// 'x' view (Z-Y plane, rotated 90° CW so screen-right is -Z): up/down move Y, left/right move Z.
+const VIEW_DIR_3D = {
+    z: {
+        up:    { dx: 0, dy: -1, dz: 0 },
+        down:  { dx: 0, dy:  1, dz: 0 },
+        left:  { dx: -1, dy: 0, dz: 0 },
+        right: { dx:  1, dy: 0, dz: 0 },
+    },
+    x: {
+        up:    { dx: 0, dy: -1, dz: 0 },
+        down:  { dx: 0, dy:  1, dz: 0 },
+        left:  { dx: 0, dy: 0, dz:  1 },
+        right: { dx: 0, dy: 0, dz: -1 },
+    },
+};
+
 // Clockwise perpendicular for ice slip
 const ICE_SLIP = { up: DIR.right, right: DIR.down, down: DIR.left, left: DIR.up };
 

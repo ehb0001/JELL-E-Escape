@@ -5,8 +5,10 @@ class Player {
     constructor() {
         this.gridX = 0;
         this.gridY = 0;
+        this.gridZ = 0;
         this.visualX = 0;
         this.visualY = 0;
+        this.visualZ = 0;
         this.state = STATE.NORMAL;
         this.prevState = STATE.NORMAL;
         this.moveCount = 0;
@@ -15,8 +17,10 @@ class Player {
         this.isMoving = false;
         this.moveStartX = 0;
         this.moveStartY = 0;
+        this.moveStartZ = 0;
         this.moveEndX = 0;
         this.moveEndY = 0;
+        this.moveEndZ = 0;
         this.moveProgress = 0;
         this.moveSpeed = 5.0; // Tiles per second effective speed -> duration based on distance
         this.moveDuration = 0;
@@ -35,11 +39,13 @@ class Player {
         this.currentColor = '#69F0AE';
     }
 
-    reset(startX, startY) {
+    reset(startX, startY, startZ = 0) {
         this.gridX = startX;
         this.gridY = startY;
+        this.gridZ = startZ;
         this.visualX = startX;
         this.visualY = startY;
+        this.visualZ = startZ;
         this.state = STATE.NORMAL;
         this.prevState = STATE.NORMAL;
         this.moveCount = 0;
@@ -54,32 +60,45 @@ class Player {
 
     // ── Movement ──
 
-    startMove(direction, targetX, targetY, callback) {
+    // targetZ defaults to the current Z so 2D-only callers keep working unchanged.
+    startMove(direction, targetX, targetY, targetZ, callback) {
+        if (typeof targetZ === 'function') {
+            // Back-compat: startMove(direction, x, y, callback) with implicit Z.
+            callback = targetZ;
+            targetZ = this.gridZ;
+        }
+        if (targetZ === undefined) targetZ = this.gridZ;
+
         if (this.isMoving) return;
 
         // Don't move if already at target
-        if (targetX === this.gridX && targetY === this.gridY) return;
+        if (targetX === this.gridX && targetY === this.gridY && targetZ === this.gridZ) return;
 
         this.isMoving = true;
         this.moveStartX = this.gridX;
         this.moveStartY = this.gridY;
+        this.moveStartZ = this.gridZ;
         this.moveEndX = targetX;
         this.moveEndY = targetY;
+        this.moveEndZ = targetZ;
         this.moveProgress = 0;
         this.moveDirection = direction;
         this.onMoveComplete = callback;
 
         // Calculate duration based on distance
-        const dist = Math.abs(targetX - this.gridX) + Math.abs(targetY - this.gridY);
+        const dist = Math.abs(targetX - this.gridX) + Math.abs(targetY - this.gridY) + Math.abs(targetZ - this.gridZ);
         this.moveDuration = Math.min(0.5, 0.08 + dist * 0.06);
 
-        // Set eye direction
+        // Set eye direction (screen-space; Z-only moves don't have a 2D eye direction)
         const dir = DIR[direction];
-        this.eyeTargetX = dir.x;
-        this.eyeTargetY = dir.y;
+        this.eyeTargetX = dir ? dir.x : 0;
+        this.eyeTargetY = dir ? dir.y : 0;
 
         // Squish in movement direction
-        if (dir.x !== 0) {
+        if (targetZ !== this.moveStartZ) {
+            this.squishX = 0.9;
+            this.squishY = 0.9;
+        } else if (dir && dir.x !== 0) {
             this.squishX = 0.8;
             this.squishY = 1.15;
         } else {
@@ -132,12 +151,17 @@ class Player {
                 this.isMoving = false;
                 this.gridX = this.moveEndX;
                 this.gridY = this.moveEndY;
+                this.gridZ = this.moveEndZ;
                 this.visualX = this.moveEndX;
                 this.visualY = this.moveEndY;
+                this.visualZ = this.moveEndZ;
 
                 // Landing squish
                 const dir = DIR[this.moveDirection];
-                if (dir && dir.x !== 0) {
+                if (this.moveEndZ !== this.moveStartZ) {
+                    this.squishX = 1.1;
+                    this.squishY = 1.1;
+                } else if (dir && dir.x !== 0) {
                     this.squishX = 1.2;
                     this.squishY = 0.8;
                 } else {
@@ -155,6 +179,7 @@ class Player {
                 const t = 1 - Math.pow(1 - this.moveProgress, 3);
                 this.visualX = this.moveStartX + (this.moveEndX - this.moveStartX) * t;
                 this.visualY = this.moveStartY + (this.moveEndY - this.moveStartY) * t;
+                this.visualZ = this.moveStartZ + (this.moveEndZ - this.moveStartZ) * t;
             }
         }
     }
@@ -162,9 +187,10 @@ class Player {
     // ── Rendering ──
 
     render(ctx, level) {
-        // Player has no cross-layer movement yet: it always lives on level.viewZ,
-        // the Z layer that was active when the level loaded.
-        const pos = level.gridToPixelIfVisible(this.visualX, this.visualY, level.viewZ);
+        // visualZ is fractional mid-flight; gridToPixelIfVisible only rounds the
+        // axis fixed by the current view, so the two free axes (including a
+        // fractional Z on the Z-Y view) still animate smoothly on screen.
+        const pos = level.gridToPixelIfVisible(this.visualX, this.visualY, this.visualZ);
         if (!pos) return; // player's plane isn't the one currently in view
         const s = level.tileSize;
         const r = s * 0.35;
@@ -282,21 +308,22 @@ class Player {
                     ctx.fillRect(fx - 2, fy - 2, 4, 4);
                 }
 
-                // Draw magnetic pull lines to nearest M wall
+                // Draw magnetic pull lines to nearest M wall on the player's own layer
+                const pz = this.gridZ;
                 let mx = null, my = null, dist = Infinity;
                 for (let yy = 0; yy < level.height; yy++) {
                     for (let xx = 0; xx < level.width; xx++) {
-                        if (level.getTile(xx, yy) === TILE.METAL_WALL) {
+                        if (level.getTile(xx, yy, pz) === TILE.METAL_WALL) {
                             if (xx === this.gridX || yy === this.gridY) {
                                 let clear = true;
                                 if (xx === this.gridX) {
                                     const minY = Math.min(yy, this.gridY);
                                     const maxY = Math.max(yy, this.gridY);
-                                    for(let j=minY+1; j<maxY; j++) if(isBlocking(level.getTile(xx, j), this.state)) clear = false;
+                                    for(let j=minY+1; j<maxY; j++) if(isBlocking(level.getTile(xx, j, pz), this.state)) clear = false;
                                 } else {
                                     const minX = Math.min(xx, this.gridX);
                                     const maxX = Math.max(xx, this.gridX);
-                                    for(let j=minX+1; j<maxX; j++) if(isBlocking(level.getTile(j, this.gridY), this.state)) clear = false;
+                                    for(let j=minX+1; j<maxX; j++) if(isBlocking(level.getTile(j, this.gridY, pz), this.state)) clear = false;
                                 }
                                 if (clear) {
                                     const d = Math.abs(xx - this.gridX) + Math.abs(yy - this.gridY);
@@ -306,10 +333,10 @@ class Player {
                         }
                     }
                 }
-                
+
                 if (mx !== null && dist > 0) {
-                    const mPos = level.gridToPixelIfVisible(mx, my, level.viewZ);
-                    const pPos = level.gridToPixelIfVisible(this.visualX, this.visualY, level.viewZ);
+                    const mPos = level.gridToPixelIfVisible(mx, my, pz);
+                    const pPos = level.gridToPixelIfVisible(this.visualX, this.visualY, pz);
                     if (!mPos || !pPos) break;
                     const dx = mPos.x - pPos.x;
                     const dy = mPos.y - pPos.y;
