@@ -20,25 +20,28 @@ const STATE = {
     ELECTRIC: 'electric',
 };
 
+// [MODIFIED] 상태별 실루엣과 광원이 즉시 구분되도록 출시용 네온 팔레트와 기호로 통일
 const STATE_INFO = {
-    [STATE.NORMAL]:   { name: 'Normal',   icon: '○', color: '#69F0AE', glow: '#00E676', bgAlpha: 0.7 },
-    [STATE.MAGNET]:   { name: 'Magnet',   icon: '🧲', color: '#4FC3F7', glow: '#039BE5', bgAlpha: 0.8 },
-    [STATE.ICE]:      { name: 'Ice',      icon: '❄️', color: '#B2EBF2', glow: '#00BCD4', bgAlpha: 0.6 },
-    [STATE.ELECTRIC]: { name: 'Electric', icon: '⚡', color: '#FFD54F', glow: '#FFC107', bgAlpha: 0.9 },
+    [STATE.NORMAL]:   { name: 'Stable',   icon: '●', color: '#78FFD6', glow: '#21E6A4', bgAlpha: 0.92 },
+    [STATE.MAGNET]:   { name: 'Magnet',   icon: '∩', color: '#42C9FF', glow: '#168CFF', bgAlpha: 0.94 },
+    [STATE.ICE]:      { name: 'Cryo',     icon: '✦', color: '#B8F4FF', glow: '#3CCBFF', bgAlpha: 0.9 },
+    [STATE.ELECTRIC]: { name: 'Volt',     icon: 'ϟ', color: '#FFD66B', glow: '#FF9F1C', bgAlpha: 0.96 },
 };
 
 // ── Tile visual config ──
+// [MODIFIED] 재질마다 명도·온도·발광색을 분리해 작은 타일에서도 기능을 읽을 수 있도록 개선
 const TILE_COLORS = {
-    [TILE.FLOOR]:         { fill: '#252540', stroke: '#2a2a50' },
-    [TILE.WALL]:          { fill: '#3D3D5C', stroke: '#4a4a6a', gradient: ['#3D3D5C', '#2D2D44'] },
-    [TILE.METAL_WALL]:    { fill: '#546E7A', stroke: '#78909C', gradient: ['#78909C', '#455A64'], shine: '#90A4AE' },
-    [TILE.RUBBER_WALL]:   { fill: '#6D4C41', stroke: '#8D6E63', gradient: ['#A1887F', '#5D4037'] },
-    [TILE.ELECTRIC_DOOR]: { fill: '#FFD54F', stroke: '#FFC107', gradient: ['#FFE082', '#FFD54F'] },
-    [TILE.PORTAL]:        { fill: '#E040FB', stroke: '#AB47BC', gradient: ['#EA80FC', '#CE93D8'], glow: '#E040FB' },
-    [TILE.FIRE]:          { fill: '#FF7043', stroke: '#FF8A65', gradient: ['#FFB74D', '#E65100'] },
-    [TILE.ITEM_MAGNET]:   { color: '#4FC3F7', icon: '🧲' },
-    [TILE.ITEM_ICE]:      { color: '#B2EBF2', icon: '❄️' },
-    [TILE.ITEM_ELECTRIC]: { color: '#FFD54F', icon: '⚡' },
+    [TILE.FLOOR]:         { fill: '#111A31', stroke: '#1B2C4B' },
+    [TILE.WALL]:          { fill: '#263451', stroke: '#405478', gradient: ['#344563', '#17233B'] },
+    [TILE.METAL_WALL]:    { fill: '#34566C', stroke: '#65C7E8', gradient: ['#507E94', '#1D3D52'], shine: '#A8EEFF' },
+    [TILE.RUBBER_WALL]:   { fill: '#713C4F', stroke: '#F08A91', gradient: ['#A65367', '#4B283D'] },
+    [TILE.ELECTRIC_DOOR]: { fill: '#9B6A1F', stroke: '#FFD66B', gradient: ['#F3C557', '#6F4617'] },
+    [TILE.PORTAL]:        { fill: '#B65CFF', stroke: '#E4A8FF', gradient: ['#D696FF', '#6A2CC1'], glow: '#BF5CFF' },
+    [TILE.ITEM_MAGNET]:   { color: '#42C9FF', accent: '#F15A73', icon: '∩' },
+    [TILE.ITEM_ICE]:      { color: '#B8F4FF', accent: '#51C8FF', icon: '✦' },
+    [TILE.ITEM_ELECTRIC]: { color: '#FFD66B', accent: '#FF8F3D', icon: 'ϟ' },
+    // [MODIFIED] Keep the FIRE tile visible in the release palette after merging item mechanics.
+    [TILE.FIRE]:          { fill: '#E95D3A', stroke: '#FF9B62', gradient: ['#FFC25A', '#C73524'], glow: '#FF7043' },
 };
 
 // ── Map char → tile ──

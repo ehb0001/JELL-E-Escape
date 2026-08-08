@@ -38,6 +38,8 @@ class Game {
         this.particles = new ParticleSystem(300);
         this.audio = new Audio();
         this.input = new Input(this.canvas);
+        // [MODIFIED] 게임의 뷰·플레이어 상태를 우측 방향도와 미니맵에 동기화하기 위한 전용 UI 시스템
+        this.sidebarUI = new SidebarMapUI();
 
         // UI state
         this.titleAlpha = 0;
@@ -80,6 +82,8 @@ class Game {
 
         if (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.ANIMATING) {
             this.level.calculateLayout(this.width, this.height);
+            // [MODIFIED] 사이드바 너비가 반응형으로 바뀔 때 실제 맵 비율을 새 표시 영역에 다시 맞춤
+            this.sidebarUI.resize();
         }
     }
 
@@ -229,9 +233,15 @@ class Game {
             const btn = document.createElement('button');
             const unlocked = i <= this.unlockedLevels;
             btn.className = `level-btn ${unlocked ? 'unlocked' : 'locked'}`;
+            btn.disabled = !unlocked;
+            // [MODIFIED] 레벨 번호와 이름만 있던 카드를 구역 코드·상태·진입 방향이 보이는 탐사 카드로 개선
             btn.innerHTML = unlocked
-                ? `<span class="level-num">${lvl.id}</span><span class="level-name">${lvl.name}</span>`
-                : `<span class="level-num">🔒</span><span class="level-name">Locked</span>`;
+                ? `<span class="level-num">${String(lvl.id).padStart(2, '0')}</span>` +
+                  `<span class="level-info"><span class="level-code">SECTOR ${String(lvl.id).padStart(2, '0')} // OPEN</span>` +
+                  `<span class="level-name">${lvl.name}</span></span><span class="level-arrow">›</span>`
+                : `<span class="level-num">—</span><span class="level-info"><span class="level-code">ACCESS DENIED</span>` +
+                  `<span class="level-name">Locked sector</span></span>`;
+            btn.setAttribute('aria-label', unlocked ? `Stage ${lvl.id}: ${lvl.name}` : `Stage ${lvl.id}: locked`);
             if (unlocked) {
                 btn.addEventListener('click', () => {
                     this.audio.playButtonClick();
@@ -251,6 +261,8 @@ class Game {
         this.level.load(index);
         this.level.calculateLayout(this.width, this.height);
         this.player.reset(this.level.playerStart.x, this.level.playerStart.y, this.level.playerStart.z);
+        // [MODIFIED] 새 레벨의 X:Y:Z 크기와 시작·목표 좌표를 첫 프레임 전에도 즉시 표시
+        this.sidebarUI.render(this.level, this.player, true);
         this.state = GAME_STATE.PLAYING;
         this.transitionAlpha = 1;
         this.transitionTarget = 0;
@@ -668,111 +680,112 @@ class Game {
     }
 
     _renderTitle(ctx, w, h) {
-        // Background
-        ctx.fillStyle = '#0a0a1a';
-        ctx.fillRect(0, 0, w, h);
-
-        // Animated background particles
-        for (let i = 0; i < 30; i++) {
-            const x = (Math.sin(this.time * 0.3 + i * 2.1) * 0.5 + 0.5) * w;
-            const y = (Math.cos(this.time * 0.2 + i * 1.7) * 0.5 + 0.5) * h;
-            const alpha = 0.1 + Math.sin(this.time + i) * 0.05;
-            const size = 2 + Math.sin(this.time * 0.5 + i) * 1;
-            ctx.fillStyle = `rgba(105,240,174,${alpha})`;
-            ctx.beginPath();
-            ctx.arc(x, y, size, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
+        // [MODIFIED] 타이틀을 로고·실험체·시설 상태가 한 장면에 담기는 출시용 키비주얼로 재구성
+        this._renderLabBackdrop(ctx, w, h, 1);
         ctx.globalAlpha = this.titleAlpha;
 
-        // Title
-        ctx.save();
-        ctx.shadowColor = '#69F0AE';
-        ctx.shadowBlur = 20;
-        ctx.fillStyle = '#69F0AE';
-        ctx.font = 'bold 42px "Orbitron", sans-serif';
+        const titleSize = Math.max(38, Math.min(72, w * 0.095));
+        const centerX = w / 2;
+
+        ctx.fillStyle = '#5E7792';
+        ctx.font = '700 9px "Orbitron", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('JELL-E', w / 2, h * 0.32);
+        ctx.fillText('BIO-RESPONSE UNIT // SUBJECT 01', centerX, h * 0.215);
+
+        ctx.save();
+        ctx.shadowColor = '#78FFD6';
+        ctx.shadowBlur = 30;
+        const titleGradient = ctx.createLinearGradient(centerX - titleSize * 2.2, 0, centerX + titleSize * 2.2, 0);
+        titleGradient.addColorStop(0, '#C8FFF0');
+        titleGradient.addColorStop(0.52, '#78FFD6');
+        titleGradient.addColorStop(1, '#42C9FF');
+        ctx.fillStyle = titleGradient;
+        ctx.font = `800 ${titleSize}px "Orbitron", sans-serif`;
+        ctx.fillText('JELL-E', centerX, h * 0.305);
         ctx.restore();
 
-        // Subtitle
-        ctx.fillStyle = '#8888aa';
-        ctx.font = '16px "Orbitron", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Escape the Lab', w / 2, h * 0.40);
+        ctx.fillStyle = '#8CA0B8';
+        ctx.font = '600 12px "Space Grotesk", sans-serif';
+        ctx.fillText('ESCAPE THE LAB', centerX, h * 0.375);
 
-        // Jelly character preview
-        this._renderTitleJelly(ctx, w / 2, h * 0.55);
+        this._renderTitleJelly(ctx, centerX, h * 0.565);
 
-        // Tap prompt
-        const promptAlpha = 0.4 + Math.sin(this.time * 2) * 0.3;
+        const promptAlpha = 0.68 + Math.sin(this.time * 2.4) * 0.18;
         ctx.globalAlpha = this.titleAlpha * promptAlpha;
-        ctx.fillStyle = '#aaaacc';
-        ctx.font = '14px "Orbitron", sans-serif';
-        ctx.fillText('Tap anywhere to start', w / 2, h * 0.78);
+        const promptW = Math.min(250, w * 0.68);
+        this._roundRect(ctx, centerX - promptW / 2, h * 0.785 - 22, promptW, 44, 22);
+        ctx.fillStyle = 'rgba(14, 31, 48, 0.9)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(120, 255, 214, 0.36)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = '#D9FFF4';
+        ctx.font = '700 10px "Orbitron", sans-serif';
+        ctx.fillText('TAP  /  SWIPE TO INITIALIZE', centerX, h * 0.785);
 
         ctx.globalAlpha = 1;
     }
 
     _renderTitleJelly(ctx, x, y) {
-        const r = 35;
+        // [MODIFIED] 타이틀 마스코트를 게임 본체와 동일한 젤 재질·표정 언어로 통일
+        const r = 52;
 
         ctx.save();
         ctx.translate(x, y);
-        ctx.scale(1 + Math.sin(this.time * 3) * 0.05, 1 - Math.sin(this.time * 3) * 0.05);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.34)';
+        ctx.beginPath(); ctx.ellipse(0, r * 0.9, r * 1.08, r * 0.24, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.scale(1 + Math.sin(this.time * 3) * 0.035, 1 - Math.sin(this.time * 3) * 0.035);
 
-        // Glow
-        ctx.shadowColor = '#69F0AE';
-        ctx.shadowBlur = 25;
-
-        // Body
-        ctx.fillStyle = 'rgba(105,240,174,0.7)';
+        ctx.shadowColor = '#78FFD6';
+        ctx.shadowBlur = 32;
+        const body = ctx.createRadialGradient(-r * 0.3, -r * 0.42, r * 0.05, 0, r * 0.08, r * 1.2);
+        body.addColorStop(0, '#FFFFFF');
+        body.addColorStop(0.16, '#A7FFE7');
+        body.addColorStop(0.66, '#58E7BC');
+        body.addColorStop(1, '#17483E');
+        ctx.fillStyle = body;
         ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.15)';
-        ctx.beginPath();
-        ctx.ellipse(-5, -8, r * 0.4, r * 0.3, -0.3, 0, Math.PI * 2);
+        ctx.moveTo(r, 0);
+        ctx.bezierCurveTo(r, -r * 0.78, r * 0.52, -r, 0, -r);
+        ctx.bezierCurveTo(-r * 0.58, -r, -r, -r * 0.7, -r, 0);
+        ctx.bezierCurveTo(-r, r * 0.76, -r * 0.56, r * 1.02, 0, r * 0.92);
+        ctx.bezierCurveTo(r * 0.56, r * 1.02, r, r * 0.76, r, 0);
+        ctx.closePath();
         ctx.fill();
 
         ctx.shadowBlur = 0;
-
-        // Eyes
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(-10, -5, 7, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(10, -5, 7, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#1a1a2e';
-        ctx.beginPath(); ctx.arc(-10 + Math.sin(this.time) * 2, -5, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(10 + Math.sin(this.time) * 2, -5, 4, 0, Math.PI * 2); ctx.fill();
-
-        // Mouth
-        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(0, 5, 6, 0, Math.PI);
+        ctx.strokeStyle = 'rgba(235, 255, 250, 0.55)';
+        ctx.lineWidth = 2;
         ctx.stroke();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.38)';
+        ctx.beginPath();
+        ctx.ellipse(-r * 0.3, -r * 0.42, r * 0.27, r * 0.16, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        const pupilOffset = Math.sin(this.time * 0.8) * 2;
+        for (const side of [-1, 1]) {
+            const ex = side * r * 0.32;
+            ctx.fillStyle = '#071827';
+            ctx.beginPath(); ctx.ellipse(ex, -r * 0.08, r * 0.205, r * 0.235, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#F8FFFF';
+            ctx.beginPath(); ctx.ellipse(ex, -r * 0.1, r * 0.17, r * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#0A2432';
+            ctx.beginPath(); ctx.arc(ex + pupilOffset, -r * 0.085, r * 0.085, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath(); ctx.arc(ex + pupilOffset - r * 0.025, -r * 0.12, r * 0.022, 0, Math.PI * 2); ctx.fill();
+        }
+
+        ctx.fillStyle = 'rgba(5, 28, 32, 0.58)';
+        ctx.beginPath(); ctx.ellipse(0, r * 0.29, r * 0.12, r * 0.08, 0, 0, Math.PI); ctx.fill();
 
         ctx.restore();
     }
 
     _renderLevelSelectBg(ctx, w, h) {
-        ctx.fillStyle = '#0a0a1a';
-        ctx.fillRect(0, 0, w, h);
-
-        // Subtle grid pattern
-        ctx.strokeStyle = 'rgba(40,40,80,0.3)';
-        ctx.lineWidth = 1;
-        const gridSize = 40;
-        for (let x = 0; x < w; x += gridSize) {
-            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-        }
-        for (let y = 0; y < h; y += gridSize) {
-            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-        }
+        // [MODIFIED] 레벨 선택 배경도 타이틀과 같은 시설 공간을 공유해 화면 전환의 일관성을 유지
+        this._renderLabBackdrop(ctx, w, h, 0.65);
     }
 
     _renderGame(ctx, w, h) {
@@ -820,6 +833,8 @@ class Game {
 
         // HUD (DOM-based, updated separately from render)
         this._updateHUD();
+        // [MODIFIED] 이동 애니메이션과 Tab/Q/E 시점 변경을 현재 프레임의 사이드바에 실시간 반영
+        this.sidebarUI.render(this.level, this.player);
 
         // Tutorial
         if (this.tutorialAlpha > 0.01) {
@@ -852,7 +867,8 @@ class Game {
         this.el.stateIcon.style.color = stateInfo.color;
         this.el.stateName.textContent = stateInfo.name;
         this.el.stateName.style.color = stateInfo.color;
-        this.el.moves.textContent = `Moves: ${this.player.moveCount}`;
+        // [MODIFIED] 상단 HUD가 MOVES 레이블을 별도로 가지므로 값만 갱신해 정보 중복을 제거
+        this.el.moves.textContent = `${this.player.moveCount}`;
     }
 
     _handleTap(clientX, clientY) {
@@ -863,39 +879,60 @@ class Game {
     }
 
     _renderClearOverlay(ctx, w, h) {
+        // [MODIFIED] 클리어 화면을 단순 텍스트 오버레이에서 결과 카드와 상태 링이 있는 완료 화면으로 개선
         const alpha = Math.min(1, this.clearTimer * 2);
         ctx.globalAlpha = alpha;
 
-        // Dark overlay
-        ctx.fillStyle = 'rgba(10,10,26,0.6)';
+        ctx.fillStyle = 'rgba(3, 7, 15, 0.76)';
         ctx.fillRect(0, 0, w, h);
 
-        // Clear message
-        const centerY = h * 0.4;
+        const centerY = h * 0.45;
+        const cardW = Math.min(430, w * 0.76);
+        const cardH = 230;
+        this._roundRect(ctx, w / 2 - cardW / 2, centerY - cardH / 2, cardW, cardH, 24);
+        const card = ctx.createLinearGradient(0, centerY - cardH / 2, 0, centerY + cardH / 2);
+        card.addColorStop(0, 'rgba(20, 39, 59, 0.96)');
+        card.addColorStop(1, 'rgba(7, 16, 30, 0.97)');
+        ctx.fillStyle = card;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(120, 255, 214, 0.24)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
-        ctx.save();
-        ctx.shadowColor = '#FFD54F';
-        ctx.shadowBlur = 20;
-        ctx.fillStyle = '#FFD54F';
-        ctx.font = 'bold 32px "Orbitron", sans-serif';
+        ctx.strokeStyle = 'rgba(120, 255, 214, 0.2)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(w / 2, centerY - 55, 27 + Math.sin(this.time * 3) * 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#78FFD6';
+        ctx.font = '700 16px "Orbitron", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Stage Clear!', w / 2, centerY);
+        ctx.fillText('✓', w / 2, centerY - 55);
+
+        ctx.save();
+        ctx.shadowColor = '#78FFD6';
+        ctx.shadowBlur = 22;
+        ctx.fillStyle = '#DFFFF5';
+        ctx.font = '800 27px "Orbitron", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('SECTOR CLEARED', w / 2, centerY - 5);
         ctx.restore();
 
-        ctx.fillStyle = '#aaa';
-        ctx.font = '16px "Orbitron", sans-serif';
-        ctx.fillText(`Moves: ${this.player.moveCount}`, w / 2, centerY + 45);
+        ctx.fillStyle = '#778AA3';
+        ctx.font = '600 10px "Orbitron", sans-serif';
+        ctx.fillText(`MOVEMENT LOG  //  ${String(this.player.moveCount).padStart(2, '0')} MOVES`, w / 2, centerY + 35);
 
         // Next prompt
         if (this.clearTimer > 1) {
             const promptAlpha = 0.5 + Math.sin(this.time * 3) * 0.3;
             ctx.globalAlpha = alpha * promptAlpha;
-            ctx.fillStyle = '#aaaacc';
-            ctx.font = '14px "Orbitron", sans-serif';
+            ctx.fillStyle = '#B8C9DB';
+            ctx.font = '700 9px "Orbitron", sans-serif';
 
             const hasNext = this.currentLevel + 1 < LEVELS_DATA.length;
-            ctx.fillText(hasNext ? 'Swipe for next stage' : 'All stages cleared! Swipe to return.', w / 2, centerY + 90);
+            ctx.fillText(hasNext ? 'SWIPE TO ENTER NEXT SECTOR  →' : 'ALL SECTORS SECURE  //  SWIPE TO ARCHIVE', w / 2, centerY + 78);
         }
 
         ctx.globalAlpha = 1;
@@ -913,6 +950,52 @@ class Game {
         ctx.lineTo(x, y + r);
         ctx.quadraticCurveTo(x, y, x + r, y);
         ctx.closePath();
+    }
+
+    _renderLabBackdrop(ctx, w, h, intensity = 1) {
+        // New rendering helper is kept at the end of the class per repository placement rules.
+        const bg = ctx.createRadialGradient(w * 0.5, h * 0.38, 0, w * 0.5, h * 0.45, Math.max(w, h) * 0.76);
+        bg.addColorStop(0, `rgba(16, 43, 59, ${intensity})`);
+        bg.addColorStop(0.5, `rgba(7, 16, 31, ${intensity})`);
+        bg.addColorStop(1, `rgba(3, 6, 14, ${intensity})`);
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.save();
+        ctx.strokeStyle = `rgba(89, 142, 170, ${0.075 * intensity})`;
+        ctx.lineWidth = 1;
+        const grid = 48;
+        const drift = (this.time * 4) % grid;
+        for (let x = -grid + drift; x < w + grid; x += grid) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+        }
+        for (let y = -grid + drift; y < h + grid; y += grid) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        }
+
+        ctx.strokeStyle = `rgba(120, 255, 214, ${0.13 * intensity})`;
+        ctx.lineWidth = 1;
+        for (const side of [-1, 1]) {
+            const edgeX = w / 2 + side * Math.min(w * 0.42, 420);
+            ctx.beginPath();
+            ctx.moveTo(edgeX, h * 0.16);
+            ctx.lineTo(edgeX, h * 0.84);
+            ctx.stroke();
+            for (let i = 0; i < 5; i++) {
+                const markerY = h * (0.24 + i * 0.13);
+                ctx.fillStyle = i === 2 ? '#78FFD6' : 'rgba(112, 154, 183, 0.35)';
+                ctx.fillRect(edgeX - side * 8, markerY, side * 8, 1);
+            }
+        }
+
+        for (let i = 0; i < 22; i++) {
+            const px = (Math.sin(i * 29.13 + this.time * 0.14) * 0.5 + 0.5) * w;
+            const py = (Math.cos(i * 17.71 + this.time * 0.11) * 0.5 + 0.5) * h;
+            const glow = 0.08 + Math.sin(this.time * 1.4 + i) * 0.035;
+            ctx.fillStyle = `rgba(120, 255, 214, ${glow * intensity})`;
+            ctx.beginPath(); ctx.arc(px, py, i % 4 === 0 ? 1.6 : 0.8, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
     }
 }
 

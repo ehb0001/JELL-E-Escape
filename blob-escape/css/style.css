@@ -1,6 +1,7 @@
 /* ── Project JELL-E: Global Styles ── */
 
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800&display=swap');
+/* [MODIFIED] HUD용 Orbitron과 본문용 Space Grotesk를 한 요청으로 로드해 출시 UI의 가독성과 로딩 비용을 함께 개선 */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 * {
     margin: 0;
@@ -134,19 +135,200 @@ body.at-title #game-container {
     touch-action: none;
 }
 
-/* ── Sidebar ── */
+/* [MODIFIED] 비어 있던 Sidebar를 실제 비율 방향도와 탑뷰 미니맵 패널로 사용 */
 #sidebar {
     flex-shrink: 0;
-    width: 220px;
-    background: rgba(10, 10, 26, 0.85);
-    border-left: 1px solid rgba(105, 240, 174, 0.08);
+    width: clamp(220px, 22vw, 270px);
+    padding: 14px;
+    background:
+        linear-gradient(180deg, rgba(18, 19, 43, 0.97), rgba(8, 9, 25, 0.98));
+    border-left: 1px solid rgba(105, 240, 174, 0.15);
     overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+.sidebar-card {
+    padding: 14px;
+    border: 1px solid rgba(130, 149, 196, 0.14);
+    border-radius: 14px;
+    background: rgba(28, 30, 60, 0.62);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2), inset 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.sidebar-card + .sidebar-card {
+    margin-top: 12px;
+}
+
+.sidebar-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.sidebar-kicker {
+    display: block;
+    margin-bottom: 4px;
+    color: #5f6d91;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+}
+
+.sidebar-heading h2 {
+    color: #dce6f5;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+}
+
+.key-hint {
+    padding: 4px 7px;
+    border: 1px solid rgba(105, 240, 174, 0.24);
+    border-radius: 5px;
+    background: rgba(105, 240, 174, 0.07);
+    color: #69f0ae;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}
+
+#map-orientation {
+    display: block;
+    width: 100%;
+    height: 142px;
+}
+
+.view-label {
+    margin-top: 5px;
+    color: #69f0ae;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.view-detail {
+    margin-top: 5px;
+    color: #7885a7;
+    font-size: 9px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.minimap-viewport {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 164px;
+    padding: 8px;
+    border: 1px solid rgba(130, 149, 196, 0.1);
+    border-radius: 10px;
+    background:
+        linear-gradient(rgba(81, 97, 136, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(81, 97, 136, 0.035) 1px, transparent 1px),
+        rgba(5, 7, 19, 0.72);
+    background-size: 12px 12px;
+}
+
+#topview-minimap {
+    display: block;
+    outline: 1px solid rgba(105, 240, 174, 0.22);
+    border-radius: 4px;
+    background: #101329;
+    box-shadow: 0 0 18px rgba(105, 240, 174, 0.06);
+}
+
+.minimap-ratio {
+    margin-top: 8px;
+    color: #657292;
+    font-size: 8px;
+    text-align: center;
+    letter-spacing: 0.4px;
+}
+
+.map-legend {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 10px;
+    color: #8793ae;
+    font-size: 8px;
+}
+
+.map-legend span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.map-legend i {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+}
+
+.legend-player {
+    border-radius: 2px 50% 50% 50%;
+    background: #69f0ae;
+    box-shadow: 0 0 6px rgba(105, 240, 174, 0.8);
+    transform: rotate(-45deg);
+}
+
+.legend-goal {
+    border: 1px solid #e040fb;
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(224, 64, 251, 0.65);
 }
 
 @media (max-width: 700px) {
     #sidebar {
-        width: 0;
-        border-left: none;
+        width: 184px;
+        padding: 9px;
+    }
+
+    .sidebar-card {
+        padding: 10px;
+    }
+
+    #map-orientation {
+        height: 118px;
+    }
+
+    .minimap-viewport {
+        height: 126px;
+    }
+
+    .map-legend {
+        gap: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    #sidebar {
+        width: 152px;
+        padding: 7px;
+    }
+
+    .sidebar-card {
+        padding: 8px;
+        border-radius: 10px;
+    }
+
+    .sidebar-kicker,
+    .map-legend,
+    .minimap-ratio {
+        display: none;
+    }
+
+    #map-orientation {
+        height: 94px;
+    }
+
+    .minimap-viewport {
+        height: 100px;
+        padding: 5px;
     }
 }
 
