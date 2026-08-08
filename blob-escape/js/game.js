@@ -300,85 +300,52 @@ class Game {
         if (!delta) return;
         const { dx, dy, dz } = delta;
 
-        if (this.iceKickWait) {
-            this._resolveIceKick(direction);
-            return;
-        }
-
         const startX = this.player.gridX;
         const startY = this.player.gridY;
         const startZ = this.player.gridZ;
-        let x = startX;
-        let y = startY;
-        let z = startZ;
-        let hitWallType = null;
-        let hitWallX = undefined;
-        let hitWallY = undefined;
-        let hitWallZ = undefined;
-        let moved = false;
+        const startState = this.player.state;
 
-        // Perpendicular axis within the current view plane (not the move axis itself),
-        // used by the magnet snap check. Movement always stays within one 2D plane:
-        // X-Y view moves along X or Y (perpendicular is the other of the two);
-        // Z-Y view moves along Z or Y (perpendicular is the other of the two).
-        let perpDx = 0, perpDy = 0, perpDz = 0;
-        if (dx !== 0) {
-            perpDy = 1; // X-Y view, moving along X -> perpendicular is Y
-        } else if (dz !== 0) {
-            perpDy = 1; // Z-Y view, moving along Z -> perpendicular is Y
-        } else {
-            // Moving along Y: perpendicular is X (X-Y view) or Z (Z-Y view).
-            if (this.level.viewAxis === 'x') perpDz = 1;
-            else perpDx = 1;
-        }
+        const initialSlide = this._resolveSlide(startX, startY, startZ, dx, dy, dz);
+        let x = initialSlide.x;
+        let y = initialSlide.y;
+        let z = initialSlide.z;
+        let hitWallType = initialSlide.hitWallType;
+        let hitWallX = initialSlide.hitWallX;
+        let hitWallY = initialSlide.hitWallY;
+        let hitWallZ = initialSlide.hitWallZ;
+        let moved = initialSlide.moved;
 
-        while (true) {
-            const nx = x + dx;
-            const ny = y + dy;
-            const nz = z + dz;
-            const tile = this.level.getTile(nx, ny, nz);
-
-            if (tile === TILE.PORTAL) {
-                x = nx; y = ny; z = nz;
-                moved = true;
-                break;
-            }
-
-            if (tile === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
-                // If sliding through an electric door with electric state, we do NOT stop
-                // But we will handle opening it in the secondary move callback
-            } else if (isBlocking(tile, this.player.state)) {
-                hitWallType = tile;
-                hitWallX = nx;
-                hitWallY = ny;
-                hitWallZ = nz;
-                break;
-            }
-
-            x = nx; y = ny; z = nz;
+        if (!moved) {
+            if (hitWallType !== TILE.RUBBER_WALL) return;
             moved = true;
-
-            // Magnet: stop if a metal wall is right beside the tile just entered
-            // (checked along the perpendicular axis of the current view plane).
-            if (this.player.state === STATE.MAGNET) {
-                const side1x = x + perpDx, side1y = y + perpDy, side1z = z + perpDz;
-                const side2x = x - perpDx, side2y = y - perpDy, side2z = z - perpDz;
-                if (this.level.getTile(side1x, side1y, side1z) === TILE.METAL_WALL) {
-                    hitWallType = TILE.METAL_WALL;
-                    hitWallX = side1x; hitWallY = side1y; hitWallZ = side1z;
-                    break;
-                }
-                if (this.level.getTile(side2x, side2y, side2z) === TILE.METAL_WALL) {
-                    hitWallType = TILE.METAL_WALL;
-                    hitWallX = side2x; hitWallY = side2y; hitWallZ = side2z;
-                    break;
-                }
-            }
         }
+
+        // [ORDER-DEPENDENT] 불 블록 검사는 자석 정지 반영이 끝난 최종 raw 도달 지점이 확정된 뒤에만 수행해야 함.
+        // 철 벽이 불 블록보다 더 가까우면 자석이 먼저 멈추므로 불 블록은 스캔 범위 밖이 됨.
+        const firePos = this._scanForFire(startX, startY, startZ, x, y, z, dx, dy, dz);
+        if (firePos) {
+            if (startState !== STATE.ICE) {
+                return;
+            }
+
+            this.level.extinguishFire(firePos.x, firePos.y, firePos.z);
+            this.player.changeState(STATE.NORMAL, null, undefined, undefined);
+
+            const recalculated = this._resolveSlide(startX, startY, startZ, dx, dy, dz);
+            x = recalculated.x;
+            y = recalculated.y;
+            z = recalculated.z;
+            hitWallType = recalculated.hitWallType;
+            hitWallX = recalculated.hitWallX;
+            hitWallY = recalculated.hitWallY;
+            hitWallZ = recalculated.hitWallZ;
+            moved = recalculated.moved;
+        }
+
+        if (!moved) return;
 
         // Items picked up mid-move only take visual/state effect this turn;
-        // their gameplay effect (ice kick, magnet snap, electric passage) starts next turn.
-        const startState = this.player.state;
+        // their gameplay effect (magnet snap, electric passage) starts next turn.
         let itemsConsumed = [];
         let ix = this.player.gridX;
         let iy = this.player.gridY;
@@ -396,25 +363,18 @@ class Game {
         let bounceY = y;
         let bounceZ = z;
 
-        const pendingIceKick = hitWallType !== null && startState === STATE.ICE;
-
         if (hitWallType === TILE.RUBBER_WALL) {
             const backDx = -dx, backDy = -dy, backDz = -dz;
-            let bounces = 0;
-            while(bounces < 2) {
-                const bx = bounceX + backDx;
-                const by = bounceY + backDy;
-                const bz = bounceZ + backDz;
-                if(isBlocking(this.level.getTile(bx, by, bz), startState) ||
-                   (bx === this.player.gridX && by === this.player.gridY && bz === this.player.gridZ)) {
-                    break;
-                }
+            const bx = x + backDx;
+            const by = y + backDy;
+            const bz = z + backDz;
+            const tileBehind = this.level.getTile(bx, by, bz);
+            if (!isBlocking(tileBehind, startState)) {
                 bounceX = bx; bounceY = by; bounceZ = bz;
-                bounces++;
+            } else {
+                bounceX = x; bounceY = y; bounceZ = z;
             }
         }
-
-        if (!moved) return;
 
         this.audio.playMove();
         this.state = GAME_STATE.ANIMATING;
@@ -493,88 +453,105 @@ class Game {
                      return d.dx === -dx && d.dy === -dy && d.dz === -dz;
                  });
                  this.player.startMove(backDirName, bounceX, bounceY, bounceZ, finishMove);
-             } else if (pendingIceKick) {
-                 this._enterIceKickWait(x, y, z, direction);
              } else {
                  finishMove();
              }
         };
 
         this.player.startMove(direction, x, y, z, doSecondaryMove);
+        if (!this.player.isMoving) {
+            doSecondaryMove();
+        }
     }
 
-    // ── Ice kick (post-slide direction choice) ──
+    _resolveSlide(startX, startY, startZ, dx, dy, dz) {
+        let x = startX;
+        let y = startY;
+        let z = startZ;
+        let hitWallType = null;
+        let hitWallX = undefined;
+        let hitWallY = undefined;
+        let hitWallZ = undefined;
+        let moved = false;
 
-    _enterIceKickWait(x, y, z, incomingDirection) {
-        this.player.gridX = x;
-        this.player.gridY = y;
-        this.player.gridZ = z;
-        this.player.visualX = x;
-        this.player.visualY = y;
-        this.player.visualZ = z;
-        this.player.isMoving = false;
-        this.state = GAME_STATE.PLAYING;
-        this.input.enable();
-        this.iceKickWait = { x, y, z, incomingDirection, viewAxis: this.level.viewAxis };
-    }
-
-    _resolveIceKick(direction) {
-        const wait = this.iceKickWait;
-        const delta = this._moveDelta(direction);
-        if (!delta) return;
-        const inDelta = VIEW_DIR_3D[wait.viewAxis][wait.incomingDirection];
-
-        // Ignore the direction we were traveling and its opposite; only perpendicular kicks resolve the wait.
-        const isPerpendicular = (delta.dx !== inDelta.dx || delta.dy !== inDelta.dy || delta.dz !== inDelta.dz)
-            && (delta.dx !== -inDelta.dx || delta.dy !== -inDelta.dy || delta.dz !== -inDelta.dz);
-        if (!isPerpendicular) return;
-
-        this.iceKickWait = null;
-
-        const kx = wait.x + delta.dx;
-        const ky = wait.y + delta.dy;
-        const kz = wait.z + delta.dz;
-        const tile = this.level.getTile(kx, ky, kz);
-
-        if (isBlocking(tile, this.player.state)) {
-            const pos = this._gridToPixel(kx, ky, kz);
-            if (pos) {
-                this.particles.burstWallHit(pos.x, pos.y, tile);
-                this.audio.playHitWall(tile);
-            }
-            this.screenShake = 3;
-            if (tile === TILE.RUBBER_WALL) this.level.triggerRubberBounce(kx, ky, kz);
-            // Ice is consumed even when the kick is blocked by a wall.
-            this.player.changeState(STATE.NORMAL, null, pos && pos.x, pos && pos.y);
-            return;
+        // Perpendicular axis within the current view plane (not the move axis itself),
+        // used by the magnet snap check. Movement always stays within one 2D plane:
+        // X-Y view moves along X or Y (perpendicular is the other of the two);
+        // Z-Y view moves along Z or Y (perpendicular is the other of the two).
+        let perpDx = 0, perpDy = 0, perpDz = 0;
+        if (dx !== 0) {
+            perpDy = 1; // X-Y view, moving along X -> perpendicular is Y
+        } else if (dz !== 0) {
+            perpDy = 1; // Z-Y view, moving along Z -> perpendicular is Y
+        } else {
+            // Moving along Y: perpendicular is X (X-Y view) or Z (Z-Y view).
+            if (this.level.viewAxis === 'x') perpDz = 1;
+            else perpDx = 1;
         }
 
-        this.audio.playMove();
-        this.state = GAME_STATE.ANIMATING;
-        this.input.disable();
+        while (true) {
+            const nx = x + dx;
+            const ny = y + dy;
+            const nz = z + dz;
+            const tile = this.level.getTile(nx, ny, nz);
 
-        this.player.startMove(direction, kx, ky, kz, () => {
-            const pos = this._gridToPixel(kx, ky, kz);
-            if (isItem(tile)) {
-                this.level.consumeItem(kx, ky, kz);
-                if (pos) {
-                    this.particles.burstStateChange(pos.x, pos.y, TILE_COLORS[tile].color);
-                    this.audio.playStateChange();
-                }
-                this.player.changeState(ITEM_TO_STATE[tile], null, pos && pos.x, pos && pos.y);
-            } else if (tile === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
-                this.level.openDoor(kx, ky, kz);
-                if (pos) {
-                    this.particles.burstStateChange(pos.x, pos.y, '#ffffff');
-                    this.audio.playStateChange();
-                }
-                this.player.changeState(STATE.NORMAL, null, pos && pos.x, pos && pos.y);
-            } else {
-                // Ice kick consumed the ice state
-                this.player.changeState(STATE.NORMAL, null, pos && pos.x, pos && pos.y);
+            if (tile === TILE.PORTAL) {
+                x = nx; y = ny; z = nz;
+                moved = true;
+                break;
             }
-            this._onMoveComplete(kx, ky, kz, null, [], undefined, undefined, undefined);
-        });
+
+            if (tile === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
+                // If sliding through an electric door with electric state, we do NOT stop
+                // But we will handle opening it in the secondary move callback
+            } else if (isBlocking(tile, this.player.state)) {
+                hitWallType = tile;
+                hitWallX = nx;
+                hitWallY = ny;
+                hitWallZ = nz;
+                break;
+            }
+
+            x = nx; y = ny; z = nz;
+            moved = true;
+
+            // Magnet: stop if a metal wall is right beside the tile just entered
+            // (checked along the perpendicular axis of the current view plane).
+            if (this.player.state === STATE.MAGNET) {
+                const side1x = x + perpDx, side1y = y + perpDy, side1z = z + perpDz;
+                const side2x = x - perpDx, side2y = y - perpDy, side2z = z - perpDz;
+                if (this.level.getTile(side1x, side1y, side1z) === TILE.METAL_WALL) {
+                    hitWallType = TILE.METAL_WALL;
+                    hitWallX = side1x; hitWallY = side1y; hitWallZ = side1z;
+                    break;
+                }
+                if (this.level.getTile(side2x, side2y, side2z) === TILE.METAL_WALL) {
+                    hitWallType = TILE.METAL_WALL;
+                    hitWallX = side2x; hitWallY = side2y; hitWallZ = side2z;
+                    break;
+                }
+            }
+        }
+
+        return { x, y, z, hitWallType, hitWallX, hitWallY, hitWallZ, moved };
+    }
+
+    _scanForFire(startX, startY, startZ, endX, endY, endZ, dx, dy, dz) {
+        let x = startX;
+        let y = startY;
+        let z = startZ;
+
+        while (x !== endX || y !== endY || z !== endZ) {
+            x += dx;
+            y += dy;
+            z += dz;
+            const tile = this.level.getTile(x, y, z);
+            if (tile === TILE.FIRE) {
+                return { x, y, z };
+            }
+        }
+
+        return null;
     }
 
     _onMoveComplete(x, y, z, hitWallType, itemsConsumed, hitWallX, hitWallY, hitWallZ) {
@@ -642,7 +619,7 @@ class Game {
 
     _loadProgress() {
         // Unlock all levels for easy access and verification
-        return 36;
+        return Number.MAX_SAFE_INTEGER;
     }
 
     // ── Rendering ──

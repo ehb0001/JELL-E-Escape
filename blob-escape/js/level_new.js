@@ -31,6 +31,7 @@ class Level {
         this.playerStart = { x: 0, y: 0, z: 0 };
         this.portalPos = { x: 0, y: 0, z: 0 };
         this.consumedItems = new Set(); // Track consumed items by "x,y,z"
+        this.extinguishedFire = new Set(); // Track fire tiles that were extinguished by ice
         this.openedDoors = new Set();
         this.levelData = null;
         this.tileSize = 0;
@@ -55,6 +56,7 @@ class Level {
 
         this.levelData = data;
         this.consumedItems = new Set();
+        this.extinguishedFire = new Set();
         this.openedDoors = new Set();
         this.rubberHitMap.clear();
 
@@ -163,6 +165,7 @@ class Level {
     getTile(x, y, z = this.viewZ) {
         if (x < 0 || y < 0 || z < 0 || x >= this.width || y >= this.height || z >= this.depth) return TILE.WALL;
         const key = `${x},${y},${z}`;
+        if (this.extinguishedFire.has(key)) return TILE.WALL;
         if (this.consumedItems.has(key)) return TILE.FLOOR;
         return this.grid[z][y][x];
     }
@@ -173,6 +176,10 @@ class Level {
 
     openDoor(x, y, z = this.viewZ) {
         this.openedDoors.add(`${x},${y},${z}`);
+    }
+
+    extinguishFire(x, y, z = this.viewZ) {
+        this.extinguishedFire.add(`${x},${y},${z}`);
     }
 
     triggerRubberBounce(x, y, z = this.viewZ) {
@@ -293,6 +300,14 @@ class Level {
 
             case TILE.ELECTRIC_DOOR:
                 this._renderDoor(ctx, tile, innerX, innerY, innerS, px, py, s);
+                break;
+
+            case TILE.FIRE:
+                this._renderGradientTile(ctx, innerX, innerY, innerS, TILE_COLORS[TILE.FIRE]);
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.beginPath();
+                ctx.arc(px + s / 2, py + s / 2, Math.max(2, s * 0.18), 0, Math.PI * 2);
+                ctx.fill();
                 break;
         }
         ctx.restore();

@@ -6,6 +6,7 @@ const TILE = {
     RUBBER_WALL: 3,  // Brown bouncy wall - bounces player back 2 tiles
     ELECTRIC_DOOR: 4,// Yellow door - only electric state can pass
     PORTAL: 5,       // Exit
+    FIRE: 6,         // Orange fire block - cancels the whole swipe when on the path
     ITEM_MAGNET: 10,
     ITEM_ICE: 11,
     ITEM_ELECTRIC: 12,
@@ -34,6 +35,7 @@ const TILE_COLORS = {
     [TILE.RUBBER_WALL]:   { fill: '#6D4C41', stroke: '#8D6E63', gradient: ['#A1887F', '#5D4037'] },
     [TILE.ELECTRIC_DOOR]: { fill: '#FFD54F', stroke: '#FFC107', gradient: ['#FFE082', '#FFD54F'] },
     [TILE.PORTAL]:        { fill: '#E040FB', stroke: '#AB47BC', gradient: ['#EA80FC', '#CE93D8'], glow: '#E040FB' },
+    [TILE.FIRE]:          { fill: '#FF7043', stroke: '#FF8A65', gradient: ['#FFB74D', '#E65100'] },
     [TILE.ITEM_MAGNET]:   { color: '#4FC3F7', icon: '🧲' },
     [TILE.ITEM_ICE]:      { color: '#B2EBF2', icon: '❄️' },
     [TILE.ITEM_ELECTRIC]: { color: '#FFD54F', icon: '⚡' },
@@ -48,6 +50,7 @@ const CHAR_TO_TILE = {
     '.': TILE.FLOOR,
     'X': TILE.PORTAL,
     'D': TILE.ELECTRIC_DOOR,
+    'F': TILE.FIRE,
     'P': TILE.FLOOR,
     'm': TILE.ITEM_MAGNET,
     'i': TILE.ITEM_ICE,
@@ -92,9 +95,6 @@ const VIEW_DIR_3D = {
         right: { dx: 0, dy: 0, dz: -1 },
     },
 };
-
-// Clockwise perpendicular for ice slip
-const ICE_SLIP = { up: DIR.right, right: DIR.down, down: DIR.left, left: DIR.up };
 
 const GAME_STATE = {
     TITLE: 'title', LEVEL_SELECT: 'level_select',

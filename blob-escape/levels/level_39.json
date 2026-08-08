@@ -1,0 +1,12 @@
+{
+  "id": 39,
+  "name": "Temp Rubber Test",
+  "subtitle": "Hit the rubber wall and bounce back one tile",
+  "map": [
+    [
+      "#########",
+      "#P.R.X###",
+      "#########"
+    ]
+  ]
+}
