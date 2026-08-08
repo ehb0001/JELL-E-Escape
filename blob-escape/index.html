@@ -10,7 +10,7 @@
 
     <title>JELL-E: Escape the Lab</title>
 
-    <link rel="stylesheet" href="css/style.css?v=4">
+    <link rel="stylesheet" href="css/style.css?v=5">
 
     <!-- Favicon (inline SVG) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟢</text></svg>">
@@ -37,7 +37,35 @@
             </main>
 
             <aside id="sidebar">
-                <!-- Reserved for view controls, minimap, buttons, etc. -->
+                <section class="sidebar-card view-card" aria-labelledby="view-map-title">
+                    <div class="sidebar-heading">
+                        <div>
+                            <span class="sidebar-kicker">MAP ORIENTATION</span>
+                            <h2 id="view-map-title">현재 맵 시점</h2>
+                        </div>
+                        <span class="key-hint">TAB</span>
+                    </div>
+                    <canvas id="map-orientation" role="img" aria-label="현재 보고 있는 맵 슬라이스"></canvas>
+                    <div id="view-label" class="view-label">정면 (X-Y)</div>
+                    <div id="view-detail" class="view-detail">맵 정보를 불러오는 중</div>
+                </section>
+
+                <section class="sidebar-card minimap-card" aria-labelledby="minimap-title">
+                    <div class="sidebar-heading">
+                        <div>
+                            <span class="sidebar-kicker">LIVE POSITION</span>
+                            <h2 id="minimap-title">탑뷰 미니맵</h2>
+                        </div>
+                    </div>
+                    <div id="minimap-viewport" class="minimap-viewport">
+                        <canvas id="topview-minimap" role="img" aria-label="플레이어와 목표 지점의 탑뷰 위치"></canvas>
+                    </div>
+                    <div id="minimap-ratio" class="minimap-ratio">실제 비율 X:Z</div>
+                    <div class="map-legend" aria-hidden="true">
+                        <span><i class="legend-player"></i>현재 위치</span>
+                        <span><i class="legend-goal"></i>목표</span>
+                    </div>
+                </section>
             </aside>
         </div>
     </div>
@@ -50,7 +78,8 @@
     <script src="js/input.js?v=3"></script>
     <script src="js/level_new.js?v=10"></script>
     <script src="js/player.js?v=7"></script>
-    <script src="js/game.js?v=17"></script>
+    <script src="js/sidebar.js?v=1"></script>
+    <script src="js/game.js?v=18"></script>
 
 </body>
 </html>

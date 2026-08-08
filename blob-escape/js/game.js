@@ -38,6 +38,7 @@ class Game {
         this.particles = new ParticleSystem(300);
         this.audio = new Audio();
         this.input = new Input(this.canvas);
+        this.sidebarUI = new SidebarMapUI();
 
         // UI state
         this.titleAlpha = 0;
@@ -80,6 +81,7 @@ class Game {
 
         if (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.ANIMATING) {
             this.level.calculateLayout(this.width, this.height);
+            this.sidebarUI.resize();
         }
     }
 
@@ -251,6 +253,7 @@ class Game {
         this.level.load(index);
         this.level.calculateLayout(this.width, this.height);
         this.player.reset(this.level.playerStart.x, this.level.playerStart.y, this.level.playerStart.z);
+        this.sidebarUI.render(this.level, this.player, true);
         this.state = GAME_STATE.PLAYING;
         this.transitionAlpha = 1;
         this.transitionTarget = 0;
@@ -843,6 +846,7 @@ class Game {
 
         // HUD (DOM-based, updated separately from render)
         this._updateHUD();
+        this.sidebarUI.render(this.level, this.player);
 
         // Tutorial
         if (this.tutorialAlpha > 0.01) {

@@ -46,6 +46,12 @@ class Player {
         this.visualX = startX;
         this.visualY = startY;
         this.visualZ = startZ;
+        this.moveStartX = startX;
+        this.moveStartY = startY;
+        this.moveStartZ = startZ;
+        this.moveEndX = startX;
+        this.moveEndY = startY;
+        this.moveEndZ = startZ;
         this.state = STATE.NORMAL;
         this.prevState = STATE.NORMAL;
         this.moveCount = 0;
