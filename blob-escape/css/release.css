@@ -1,0 +1,557 @@
+/* Release visual layer: biotech lab glass UI over the existing responsive structure. */
+
+:root {
+    --ink-0: #050812;
+    --ink-1: #070d1c;
+    --ink-2: #0c1528;
+    --panel: rgba(12, 22, 40, 0.88);
+    --panel-strong: rgba(10, 18, 34, 0.96);
+    --line: rgba(133, 178, 214, 0.14);
+    --line-hot: rgba(120, 255, 214, 0.38);
+    --mint: #78ffd6;
+    --mint-dim: #36c89d;
+    --cyan: #42c9ff;
+    --violet: #bf5cff;
+    --amber: #ffd66b;
+    --text: #e8f1ff;
+    --muted: #8191aa;
+}
+
+html,
+body {
+    background:
+        radial-gradient(circle at 36% 10%, rgba(34, 117, 130, 0.12), transparent 32%),
+        radial-gradient(circle at 80% 90%, rgba(104, 49, 164, 0.1), transparent 34%),
+        var(--ink-0);
+    color: var(--text);
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+body::before {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    pointer-events: none;
+    content: '';
+    background:
+        linear-gradient(rgba(255, 255, 255, 0.012) 50%, transparent 50%),
+        radial-gradient(circle at center, transparent 55%, rgba(0, 0, 0, 0.32));
+    background-size: 100% 4px, 100% 100%;
+    mix-blend-mode: screen;
+    opacity: 0.36;
+}
+
+#app-layout {
+    background: var(--ink-0);
+}
+
+/* [MODIFIED] 상단 HUD를 게임 정보의 위계가 분명한 출시용 컨트롤 바 형태로 재구성 */
+#title-bar {
+    position: relative;
+    gap: 14px;
+    height: 64px;
+    padding: 0 18px;
+    background:
+        linear-gradient(90deg, rgba(120, 255, 214, 0.045), transparent 25%),
+        rgba(6, 12, 25, 0.96);
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+}
+
+#title-bar::after {
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 1px;
+    content: '';
+    background: linear-gradient(90deg, var(--mint), transparent 18%, transparent 82%, var(--violet));
+    opacity: 0.35;
+}
+
+.brand-mark {
+    position: relative;
+    display: grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    place-items: center;
+    border: 1px solid rgba(120, 255, 214, 0.48);
+    border-radius: 10px 10px 16px 10px;
+    background: linear-gradient(145deg, rgba(120, 255, 214, 0.22), rgba(39, 119, 105, 0.08));
+    color: var(--mint);
+    font: 800 15px/1 'Orbitron', sans-serif;
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.16), 0 0 20px rgba(120, 255, 214, 0.12);
+}
+
+.brand-mark::after {
+    position: absolute;
+    right: 4px;
+    bottom: 3px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--mint);
+    box-shadow: 0 0 8px var(--mint);
+    content: '';
+}
+
+#title-bar-stage {
+    min-width: 150px;
+    padding-right: 18px;
+    border: 0;
+    border-right: 1px solid var(--line);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: 1.15;
+    text-align: left;
+}
+
+#title-bar-stage:focus-visible,
+#title-bar-restart:focus-visible {
+    outline: 2px solid var(--mint);
+    outline-offset: 3px;
+}
+
+#title-bar-stage-num,
+.hud-label {
+    color: #52647f;
+    font: 700 8px/1.2 'Orbitron', sans-serif;
+    letter-spacing: 1.25px;
+}
+
+#title-bar-stage-name {
+    margin-top: 5px;
+    color: var(--text);
+    font: 600 13px/1 'Space Grotesk', sans-serif;
+    letter-spacing: 0.2px;
+}
+
+#title-bar-state {
+    min-width: 120px;
+    gap: 7px;
+    padding: 8px 11px;
+    border: 1px solid rgba(120, 255, 214, 0.12);
+    border-radius: 10px;
+    background: rgba(120, 255, 214, 0.045);
+}
+
+#title-bar-state .hud-label {
+    margin-right: 2px;
+}
+
+#title-bar-state-icon {
+    font: 700 14px/1 'Orbitron', sans-serif;
+    text-shadow: 0 0 10px currentColor;
+}
+
+#title-bar-state-name {
+    font: 700 10px/1 'Orbitron', sans-serif;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+}
+
+.title-bar-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #53647f;
+    font: 600 8px/1 'Orbitron', sans-serif;
+    letter-spacing: 0.6px;
+}
+
+kbd,
+.key-hint {
+    min-width: 22px;
+    padding: 4px 6px;
+    border: 1px solid rgba(134, 170, 205, 0.2);
+    border-bottom-color: rgba(134, 170, 205, 0.34);
+    border-radius: 5px;
+    background: linear-gradient(180deg, rgba(38, 55, 79, 0.75), rgba(15, 25, 43, 0.75));
+    color: #a9b9ce;
+    font: 700 8px/1 'Orbitron', sans-serif;
+    text-align: center;
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.06), 0 2px 0 rgba(0, 0, 0, 0.26);
+}
+
+.moves-cluster {
+    display: flex;
+    min-width: 64px;
+    margin-left: auto;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+#title-bar-moves {
+    margin: 3px 0 0;
+    color: var(--text);
+    font: 700 17px/1 'Orbitron', sans-serif;
+}
+
+#title-bar-restart {
+    width: 38px;
+    height: 38px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 11px;
+    background: linear-gradient(145deg, rgba(39, 55, 82, 0.72), rgba(13, 22, 40, 0.86));
+    color: #aab8ca;
+    font-size: 18px;
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.07), 0 7px 18px rgba(0, 0, 0, 0.24);
+    transition: 160ms ease;
+}
+
+#title-bar-restart:hover {
+    border-color: rgba(120, 255, 214, 0.34);
+    color: var(--mint);
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.1), 0 0 18px rgba(120, 255, 214, 0.1);
+    transform: translateY(-1px);
+}
+
+#title-bar-restart:active {
+    background: rgba(120, 255, 214, 0.1);
+    transform: translateY(1px);
+}
+
+#main-row,
+#game-container {
+    background: var(--ink-0);
+}
+
+#game-container::after {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.025);
+    content: '';
+    box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.3);
+}
+
+/* [MODIFIED] 사이드바를 실험실 계측 패널처럼 보여 주도록 재질과 정보 위계를 강화 */
+#sidebar {
+    width: clamp(232px, 23vw, 286px);
+    padding: 16px;
+    background:
+        linear-gradient(rgba(83, 121, 158, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(83, 121, 158, 0.025) 1px, transparent 1px),
+        linear-gradient(180deg, #0b1426, #060b16);
+    background-size: 20px 20px, 20px 20px, auto;
+    border-left: 1px solid var(--line);
+    box-shadow: -18px 0 40px rgba(0, 0, 0, 0.22);
+}
+
+.sidebar-card {
+    position: relative;
+    overflow: hidden;
+    padding: 15px;
+    border: 1px solid rgba(118, 158, 197, 0.14);
+    border-radius: 16px;
+    background:
+        linear-gradient(145deg, rgba(22, 38, 63, 0.78), rgba(8, 17, 32, 0.92));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.045), 0 18px 36px rgba(0, 0, 0, 0.26);
+}
+
+.sidebar-card::before {
+    position: absolute;
+    top: 0;
+    left: 15px;
+    width: 42px;
+    height: 1px;
+    background: var(--mint);
+    box-shadow: 0 0 12px var(--mint);
+    content: '';
+    opacity: 0.72;
+}
+
+.sidebar-card + .sidebar-card {
+    margin-top: 14px;
+}
+
+.sidebar-heading {
+    margin-bottom: 11px;
+}
+
+.sidebar-kicker {
+    color: #526784;
+    font: 700 7px/1 'Orbitron', sans-serif;
+    letter-spacing: 1.6px;
+}
+
+.sidebar-heading h2 {
+    margin-top: 5px;
+    color: #e7f1ff;
+    font: 600 13px/1.2 'Space Grotesk', sans-serif;
+}
+
+#map-orientation {
+    height: 150px;
+    border-radius: 10px;
+    background: radial-gradient(circle at 50% 40%, rgba(47, 137, 131, 0.08), transparent 68%);
+}
+
+.view-label {
+    color: var(--mint);
+    font: 700 11px/1 'Orbitron', sans-serif;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 12px rgba(120, 255, 214, 0.28);
+}
+
+.view-detail,
+.minimap-ratio,
+.map-legend {
+    color: #667995;
+    font-family: 'Space Grotesk', sans-serif;
+}
+
+.view-detail {
+    margin-top: 7px;
+    font-size: 9px;
+}
+
+.minimap-viewport {
+    height: 174px;
+    border: 1px solid rgba(98, 139, 177, 0.12);
+    border-radius: 12px;
+    background:
+        radial-gradient(circle at center, rgba(120, 255, 214, 0.045), transparent 58%),
+        linear-gradient(rgba(83, 121, 158, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(83, 121, 158, 0.045) 1px, transparent 1px),
+        rgba(4, 10, 21, 0.76);
+    background-size: auto, 12px 12px, 12px 12px, auto;
+    box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.36);
+}
+
+#topview-minimap {
+    outline-color: rgba(120, 255, 214, 0.3);
+    background: #0b1427;
+    box-shadow: 0 0 22px rgba(120, 255, 214, 0.1);
+}
+
+.map-legend {
+    font-size: 9px;
+}
+
+.legend-player {
+    background: var(--mint);
+    box-shadow: 0 0 8px var(--mint);
+}
+
+.legend-goal {
+    border-color: var(--violet);
+    box-shadow: 0 0 8px var(--violet);
+}
+
+/* [MODIFIED] 레벨 선택을 단순 목록이 아니라 탐사 구역 선택 화면으로 시각화 */
+#ui-overlay {
+    background:
+        radial-gradient(circle at 50% 18%, rgba(32, 110, 115, 0.16), transparent 34%),
+        rgba(4, 8, 18, 0.91);
+    backdrop-filter: blur(18px) saturate(120%);
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+}
+
+.level-select-container {
+    width: min(94%, 1040px);
+    max-width: 1040px;
+    max-height: 88vh;
+    padding: 30px;
+    border: 1px solid rgba(126, 169, 205, 0.14);
+    border-radius: 24px;
+    background: linear-gradient(145deg, rgba(14, 27, 49, 0.9), rgba(6, 13, 26, 0.94));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.05), 0 34px 90px rgba(0, 0, 0, 0.5);
+}
+
+.level-select-title {
+    margin-bottom: 8px;
+    color: var(--mint);
+    font: 800 clamp(22px, 3vw, 34px)/1 'Orbitron', sans-serif;
+    letter-spacing: 5px;
+    text-shadow: 0 0 28px rgba(120, 255, 214, 0.28);
+}
+
+.level-select-container::before {
+    display: block;
+    order: -1;
+    margin-bottom: 9px;
+    color: #526984;
+    font: 700 8px/1 'Orbitron', sans-serif;
+    letter-spacing: 2.4px;
+    content: 'ESCAPE ROUTE ARCHIVE // 37 SECTORS';
+}
+
+.level-grid {
+    grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+    gap: 10px;
+    margin-top: 22px;
+    padding: 2px 8px 16px 2px;
+}
+
+.level-btn {
+    min-height: 74px;
+    gap: 13px;
+    padding: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(115, 152, 187, 0.12);
+    border-radius: 14px;
+    background: linear-gradient(145deg, rgba(25, 42, 67, 0.72), rgba(10, 20, 37, 0.82));
+    font-family: 'Space Grotesk', sans-serif;
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.level-btn.unlocked:hover,
+.level-btn.unlocked:focus-visible {
+    border-color: rgba(120, 255, 214, 0.42);
+    background: linear-gradient(145deg, rgba(39, 76, 91, 0.78), rgba(11, 27, 44, 0.9));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.07), 0 10px 30px rgba(17, 213, 163, 0.1);
+    transform: translateY(-2px);
+}
+
+.level-num {
+    width: 46px;
+    height: 46px;
+    border: 1px solid rgba(120, 255, 214, 0.16);
+    border-radius: 11px;
+    background: rgba(120, 255, 214, 0.055);
+    color: var(--mint);
+    font: 700 15px/1 'Orbitron', sans-serif;
+    box-shadow: inset 0 0 16px rgba(120, 255, 214, 0.04);
+}
+
+.level-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.level-code {
+    display: block;
+    margin-bottom: 5px;
+    color: #536883;
+    font: 700 7px/1 'Orbitron', sans-serif;
+    letter-spacing: 1.3px;
+}
+
+.level-name {
+    display: block;
+    color: #dce8f7;
+    font: 600 12px/1.2 'Space Grotesk', sans-serif;
+    letter-spacing: 0.2px;
+}
+
+.level-arrow {
+    color: rgba(120, 255, 214, 0.4);
+    font-size: 16px;
+}
+
+.level-btn.locked {
+    filter: grayscale(0.5);
+    opacity: 0.32;
+}
+
+::-webkit-scrollbar {
+    width: 7px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 6px;
+    background: rgba(120, 255, 214, 0.28);
+    background-clip: padding-box;
+}
+
+@media (max-width: 860px) {
+    .title-bar-controls {
+        display: none;
+    }
+
+    #title-bar-stage {
+        min-width: 116px;
+    }
+}
+
+@media (max-width: 700px) {
+    #title-bar {
+        gap: 8px;
+        height: 56px;
+        padding: 0 10px;
+    }
+
+    .brand-mark {
+        width: 32px;
+        height: 32px;
+        flex-basis: 32px;
+    }
+
+    #title-bar-stage {
+        min-width: 0;
+        max-width: 112px;
+        padding-right: 9px;
+    }
+
+    #title-bar-state {
+        min-width: 0;
+        padding: 7px 8px;
+    }
+
+    #title-bar-state .hud-label {
+        display: none;
+    }
+
+    #sidebar {
+        width: 190px;
+        padding: 10px;
+    }
+
+    .sidebar-card {
+        padding: 11px;
+    }
+
+    .level-select-container {
+        padding: 22px 16px;
+        border-radius: 18px;
+    }
+}
+
+@media (max-width: 480px) {
+    .brand-mark,
+    #title-bar-state-name,
+    .moves-cluster .hud-label {
+        display: none;
+    }
+
+    #title-bar-stage {
+        max-width: 105px;
+    }
+
+    #title-bar-restart {
+        width: 34px;
+        height: 34px;
+    }
+
+    #sidebar {
+        width: 150px;
+        padding: 7px;
+    }
+
+    #map-orientation {
+        height: 98px;
+    }
+
+    .minimap-viewport {
+        height: 104px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}

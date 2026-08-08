@@ -64,6 +64,13 @@ class SidebarMapUI {
             canvas.clientHeight || 142
         );
 
+        // [MODIFIED] 방향도를 단순 와이어 박스에서 실험실 홀로그램 계측 화면으로 시각적으로 통일
+        const screenGlow = ctx.createRadialGradient(width * 0.5, height * 0.46, 0, width * 0.5, height * 0.46, width * 0.62);
+        screenGlow.addColorStop(0, 'rgba(66, 201, 255, 0.075)');
+        screenGlow.addColorStop(1, 'rgba(4, 9, 20, 0)');
+        ctx.fillStyle = screenGlow;
+        ctx.fillRect(0, 0, width, height);
+
         const mapW = Math.max(1, level.width);
         const mapH = Math.max(1, level.height);
         const mapD = Math.max(1, level.depth);
@@ -100,10 +107,10 @@ class SidebarMapUI {
         const c2 = add(c, vz);
         const d2 = add(d, vz);
 
-        this._polygon(ctx, [a2, b2, c2, d2], 'rgba(40, 47, 82, 0.46)', 'rgba(111, 128, 174, 0.22)');
-        this._polygon(ctx, [a, d, d2, a2], 'rgba(29, 36, 70, 0.78)', 'rgba(111, 128, 174, 0.3)');
-        this._polygon(ctx, [d, c, c2, d2], 'rgba(55, 65, 104, 0.55)', 'rgba(139, 154, 195, 0.34)');
-        this._polygon(ctx, [a, b, c, d], 'rgba(20, 26, 53, 0.72)', 'rgba(139, 154, 195, 0.4)');
+        this._polygon(ctx, [a2, b2, c2, d2], 'rgba(19, 42, 65, 0.46)', 'rgba(100, 168, 201, 0.24)');
+        this._polygon(ctx, [a, d, d2, a2], 'rgba(15, 32, 53, 0.8)', 'rgba(102, 178, 207, 0.34)');
+        this._polygon(ctx, [d, c, c2, d2], 'rgba(31, 59, 79, 0.58)', 'rgba(136, 204, 224, 0.38)');
+        this._polygon(ctx, [a, b, c, d], 'rgba(9, 23, 43, 0.76)', 'rgba(146, 211, 224, 0.42)');
 
         let slice;
         if (level.viewAxis === 'z') {
@@ -117,12 +124,12 @@ class SidebarMapUI {
         }
 
         ctx.save();
-        ctx.shadowColor = '#69f0ae';
-        ctx.shadowBlur = 10;
-        this._polygon(ctx, slice, 'rgba(105, 240, 174, 0.15)', '#69f0ae', 1.6);
+        ctx.shadowColor = '#78FFD6';
+        ctx.shadowBlur = 13;
+        this._polygon(ctx, slice, 'rgba(120, 255, 214, 0.17)', '#78FFD6', 1.6);
         ctx.restore();
 
-        ctx.fillStyle = '#6f7d9d';
+        ctx.fillStyle = '#718CA8';
         ctx.font = '7px "Orbitron", sans-serif';
         ctx.textBaseline = 'middle';
         ctx.fillText(`X ${mapW}`, b.x - 22, b.y + 8);
@@ -137,6 +144,7 @@ class SidebarMapUI {
     }
 
     _drawMinimap(level, player) {
+        // [MODIFIED] 미니맵 색 체계를 본 화면의 재질·목표·플레이어 광원과 맞춰 동일한 세계관으로 연결
         const viewportWidth = Math.max(1, (this.minimapViewport.clientWidth || 190) - 18);
         const viewportHeight = Math.max(1, (this.minimapViewport.clientHeight || 164) - 18);
         const ratio = level.width / Math.max(1, level.depth);
@@ -157,7 +165,7 @@ class SidebarMapUI {
         const cellW = width / level.width;
         const cellH = height / level.depth;
 
-        ctx.fillStyle = '#11152c';
+        ctx.fillStyle = '#081225';
         ctx.fillRect(0, 0, width, height);
 
         for (let z = 0; z < level.depth; z++) {
@@ -170,23 +178,23 @@ class SidebarMapUI {
                     else hasWalkable = true;
                 }
 
-                if (hasWalkable) ctx.fillStyle = 'rgba(67, 77, 116, 0.66)';
-                else if (hasWall) ctx.fillStyle = 'rgba(35, 40, 70, 0.78)';
-                else ctx.fillStyle = 'rgba(13, 17, 38, 0.9)';
+                if (hasWalkable) ctx.fillStyle = 'rgba(45, 78, 105, 0.78)';
+                else if (hasWall) ctx.fillStyle = 'rgba(24, 39, 65, 0.86)';
+                else ctx.fillStyle = 'rgba(7, 15, 31, 0.94)';
                 ctx.fillRect(x * cellW, z * cellH, Math.ceil(cellW), Math.ceil(cellH));
             }
         }
 
         if (level.viewAxis === 'z') {
-            ctx.fillStyle = 'rgba(105, 240, 174, 0.13)';
+            ctx.fillStyle = 'rgba(120, 255, 214, 0.14)';
             ctx.fillRect(0, level.viewZ * cellH, width, cellH);
-            ctx.strokeStyle = 'rgba(105, 240, 174, 0.7)';
+            ctx.strokeStyle = 'rgba(120, 255, 214, 0.8)';
             ctx.lineWidth = 1;
             ctx.strokeRect(0.5, level.viewZ * cellH + 0.5, width - 1, Math.max(1, cellH - 1));
         } else {
-            ctx.fillStyle = 'rgba(105, 240, 174, 0.13)';
+            ctx.fillStyle = 'rgba(120, 255, 214, 0.14)';
             ctx.fillRect(level.viewX * cellW, 0, cellW, height);
-            ctx.strokeStyle = 'rgba(105, 240, 174, 0.7)';
+            ctx.strokeStyle = 'rgba(120, 255, 214, 0.8)';
             ctx.lineWidth = 1;
             ctx.strokeRect(level.viewX * cellW + 0.5, 0.5, Math.max(1, cellW - 1), height - 1);
         }
@@ -214,16 +222,16 @@ class SidebarMapUI {
         const pulse = 0.75 + Math.sin(performance.now() / 220) * 0.22;
 
         ctx.save();
-        ctx.strokeStyle = `rgba(224, 64, 251, ${pulse})`;
+        ctx.strokeStyle = `rgba(191, 92, 255, ${pulse})`;
         ctx.lineWidth = Math.max(1, markerSize * 0.22);
-        ctx.shadowColor = '#e040fb';
+        ctx.shadowColor = '#BF5CFF';
         ctx.shadowBlur = markerSize;
         ctx.beginPath();
         ctx.arc(goalX, goalZ, markerSize, 0, Math.PI * 2);
         ctx.stroke();
         ctx.beginPath();
         ctx.arc(goalX, goalZ, Math.max(1.2, markerSize * 0.28), 0, Math.PI * 2);
-        ctx.fillStyle = '#f29bff';
+        ctx.fillStyle = '#EBC5FF';
         ctx.fill();
         ctx.restore();
 
@@ -237,8 +245,8 @@ class SidebarMapUI {
         ctx.save();
         ctx.translate(playerX, playerZ);
         ctx.rotate(angle);
-        ctx.fillStyle = '#69f0ae';
-        ctx.shadowColor = '#69f0ae';
+        ctx.fillStyle = '#78FFD6';
+        ctx.shadowColor = '#78FFD6';
         ctx.shadowBlur = arrowSize;
         ctx.beginPath();
         ctx.moveTo(arrowSize, 0);

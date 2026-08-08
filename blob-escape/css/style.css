@@ -1,6 +1,7 @@
 /* ── Project JELL-E: Global Styles ── */
 
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800&display=swap');
+/* [MODIFIED] HUD용 Orbitron과 본문용 Space Grotesk를 한 요청으로 로드해 출시 UI의 가독성과 로딩 비용을 함께 개선 */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 * {
     margin: 0;
@@ -134,7 +135,7 @@ body.at-title #game-container {
     touch-action: none;
 }
 
-/* ── Sidebar ── */
+/* [MODIFIED] 비어 있던 Sidebar를 실제 비율 방향도와 탑뷰 미니맵 패널로 사용 */
 #sidebar {
     flex-shrink: 0;
     width: clamp(220px, 22vw, 270px);

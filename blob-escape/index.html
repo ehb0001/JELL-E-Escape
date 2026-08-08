@@ -5,12 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0a0a1a">
+    <meta name="theme-color" content="#070b18">
     <meta name="description" content="JELL-E: Escape the Lab - A mobile puzzle game where walls change your powers">
 
     <title>JELL-E: Escape the Lab</title>
 
     <link rel="stylesheet" href="css/style.css?v=5">
+    <!-- [MODIFIED] 기존 구조는 유지하면서 출시용 아트 디렉션을 독립된 시각 레이어로 적용 -->
+    <link rel="stylesheet" href="css/release.css?v=1">
 
     <!-- Favicon (inline SVG) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟢</text></svg>">
@@ -19,16 +21,20 @@
 
     <div id="app-layout">
         <header id="title-bar">
-            <div id="title-bar-stage">
-                <div id="title-bar-stage-num">Stage</div>
+            <div class="brand-mark" aria-hidden="true"><span>J</span></div>
+            <!-- [MODIFIED] 레벨 선택 진입 요소를 키보드로도 사용할 수 있는 실제 버튼으로 변경 -->
+            <button id="title-bar-stage" type="button" aria-label="레벨 선택 열기">
+                <div id="title-bar-stage-num">SECTOR // STAGE</div>
                 <div id="title-bar-stage-name">JELL-E</div>
-            </div>
+            </button>
             <div id="title-bar-state">
+                <span class="hud-label">CORE</span>
                 <span id="title-bar-state-icon">○</span>
                 <span id="title-bar-state-name">Normal</span>
             </div>
-            <div id="title-bar-moves">Moves: 0</div>
-            <button id="title-bar-restart" aria-label="Restart level">↺</button>
+            <div class="title-bar-controls" aria-hidden="true"><kbd>TAB</kbd> VIEW <kbd>Q</kbd><kbd>E</kbd> SLICE</div>
+            <div class="moves-cluster"><span class="hud-label">MOVES</span><div id="title-bar-moves">0</div></div>
+            <button id="title-bar-restart" aria-label="Restart level"><span aria-hidden="true">↺</span></button>
         </header>
 
         <div id="main-row">
@@ -36,6 +42,7 @@
                 <canvas id="game"></canvas>
             </main>
 
+            <!-- [MODIFIED] 플레이어가 현재 뷰 슬라이스와 목표 위치를 게임 화면 옆에서 확인할 수 있도록 정보 패널 추가 -->
             <aside id="sidebar">
                 <section class="sidebar-card view-card" aria-labelledby="view-map-title">
                     <div class="sidebar-heading">
@@ -73,13 +80,14 @@
     <div id="ui-overlay"></div>
 
     <!-- Scripts (load in dependency order) -->
-    <script src="js/constants.js?v=4"></script>
-    <script src="js/effects.js?v=3"></script>
+    <script src="js/constants.js?v=5"></script>
+    <script src="js/effects.js?v=4"></script>
     <script src="js/input.js?v=3"></script>
-    <script src="js/level_new.js?v=10"></script>
-    <script src="js/player.js?v=7"></script>
-    <script src="js/sidebar.js?v=1"></script>
-    <script src="js/game.js?v=18"></script>
+    <script src="js/level_new.js?v=11"></script>
+    <script src="js/player.js?v=8"></script>
+    <!-- [MODIFIED] Game 생성 전에 SidebarMapUI 의존성을 사용할 수 있도록 game.js 바로 앞에서 로드 -->
+    <script src="js/sidebar.js?v=2"></script>
+    <script src="js/game.js?v=19"></script>
 
 </body>
 </html>

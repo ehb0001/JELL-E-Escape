@@ -39,13 +39,23 @@ class Particle {
 
     render(ctx) {
         if (!this.active) return;
+        // [MODIFIED] 단순 원형 파티클을 속도감 있는 빛 꼬리와 선명한 코어로 바꿔 충돌 피드백을 강화
         ctx.save();
-        ctx.globalAlpha = this.alpha * 0.8;
-        ctx.fillStyle = this.color;
+        ctx.globalAlpha = this.alpha * 0.52;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = Math.max(0.7, this.size * 0.42);
         ctx.shadowColor = this.color;
+        ctx.shadowBlur = this.size * 3;
+        ctx.beginPath();
+        ctx.moveTo(this.x - this.vx * 0.018, this.y - this.vy * 0.018);
+        ctx.lineTo(this.x, this.y);
+        ctx.stroke();
+
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = '#F5FFFF';
         ctx.shadowBlur = this.size * 2;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, Math.max(0.5, this.size), 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, Math.max(0.6, this.size * 0.38), 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
     }
@@ -123,7 +133,8 @@ class ParticleSystem {
 
     // Level clear celebration
     burstCelebration(x, y) {
-        const colors = ['#FFD54F', '#FF8A65', '#4FC3F7', '#69F0AE', '#E040FB', '#B2EBF2'];
+        // [MODIFIED] 전체 아트 디렉션과 축하 이펙트의 색 체계를 동일하게 유지
+        const colors = ['#FFD66B', '#FF7D8A', '#42C9FF', '#78FFD6', '#BF5CFF', '#B8F4FF'];
         for (let i = 0; i < 6; i++) {
             setTimeout(() => {
                 this.emit(
