@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="css/style.css?v=5">
     <!-- [MODIFIED] 기존 구조는 유지하면서 출시용 아트 디렉션을 독립된 시각 레이어로 적용 -->
-    <link rel="stylesheet" href="css/release.css?v=1">
+    <link rel="stylesheet" href="css/release.css?v=4">
 
     <!-- Favicon (inline SVG) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟢</text></svg>">
@@ -73,6 +73,59 @@
                         <span><i class="legend-goal"></i>목표</span>
                     </div>
                 </section>
+
+                <!-- [MODIFIED] Q/E·Tab 화면 대칭 여부와 효과음을 유저가 직접 고를 수 있는 설정 카드 추가 -->
+                <section class="sidebar-card settings-card" aria-labelledby="settings-title">
+                    <div class="sidebar-heading">
+                        <div>
+                            <span class="sidebar-kicker">SYSTEM</span>
+                            <h2 id="settings-title">설정</h2>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-group-label">X-Y 뷰 대칭</div>
+                        <div class="settings-toggle-row">
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="setting-mirror-z-h">
+                                <span class="settings-toggle-track"></span>
+                                <span class="settings-toggle-label">좌우 반전</span>
+                            </label>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="setting-mirror-z-v">
+                                <span class="settings-toggle-track"></span>
+                                <span class="settings-toggle-label">상하 반전</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-group-label">Z-Y 뷰 대칭</div>
+                        <div class="settings-toggle-row">
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="setting-mirror-x-h">
+                                <span class="settings-toggle-track"></span>
+                                <span class="settings-toggle-label">좌우 반전</span>
+                            </label>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="setting-mirror-x-v">
+                                <span class="settings-toggle-track"></span>
+                                <span class="settings-toggle-label">상하 반전</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-group-label">사운드</div>
+                        <div class="settings-toggle-row">
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="setting-sound" checked>
+                                <span class="settings-toggle-track"></span>
+                                <span class="settings-toggle-label">효과음</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
             </aside>
         </div>
     </div>
@@ -82,12 +135,12 @@
     <!-- Scripts (load in dependency order) -->
     <script src="js/constants.js?v=5"></script>
     <script src="js/effects.js?v=4"></script>
-    <script src="js/input.js?v=3"></script>
-    <script src="js/level_new.js?v=11"></script>
+    <script src="js/input.js?v=4"></script>
+    <script src="js/level_new.js?v=20"></script>
     <script src="js/player.js?v=8"></script>
     <!-- [MODIFIED] Game 생성 전에 SidebarMapUI 의존성을 사용할 수 있도록 game.js 바로 앞에서 로드 -->
-    <script src="js/sidebar.js?v=2"></script>
-    <script src="js/game.js?v=19"></script>
+    <script src="js/sidebar.js?v=4"></script>
+    <script src="js/game.js?v=27"></script>
 
 </body>
 </html>

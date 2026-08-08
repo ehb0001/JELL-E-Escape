@@ -41,6 +41,10 @@ class Game {
         // [MODIFIED] 게임의 뷰·플레이어 상태를 우측 방향도와 미니맵에 동기화하기 위한 전용 UI 시스템
         this.sidebarUI = new SidebarMapUI();
 
+        // [MODIFIED] X-Y/Z-Y 뷰 대칭, 효과음 온/오프 설정 -- 저장된 값을 불러와 level.mirror/audio에 적용하고
+        // 사이드바 설정 카드의 체크박스와 양방향으로 동기화
+        this._setupSettingsUI();
+
         // UI state
         this.titleAlpha = 0;
         this.clearTimer = 0;
@@ -49,18 +53,33 @@ class Game {
         this.screenShake = 0;
         this.time = 0;
 
-        // Transition
+        // Transition (level-load fade to/from black; unrelated to Tab/Q/E view transitions below)
         this.transitionAlpha = 1;
         this.transitionTarget = 0;
         this.transitionSpeed = 3;
-        this.pendingViewChange = null; // function to run once faded to black
+
+        // [MODIFIED] Q/E 슬라이스 이동 전용 줌+페이드 트랜지션.
+        // 이전 프레임을 오프스크린에 스냅샷해뒀다가, 새 슬라이스와 반대 방향으로 확대/축소시키며 크로스페이드.
+        this.depthSnapshotCanvas = document.createElement('canvas');
+        this.depthSnapshotCtx = this.depthSnapshotCanvas.getContext('2d');
+        this.depthTransition = null; // { t, duration, direction }
+        this.depthTransitionDuration = 0.32;
+
+        // [MODIFIED] Tab 축 전환 전용 카드 플립 트랜지션(scaleX 1->0->1, 중간 지점에서 뷰 교체).
+        this.flipTransition = null; // { t, duration, applied, change }
+        this.flipTransitionDuration = 0.36;
 
         this._resize();
         window.addEventListener('resize', () => this._resize());
         this.input.onSwipe((dir) => this._onSwipe(dir));
         this.input.onTap((x, y) => this._handleTap(x, y));
-        this.input.onViewToggle(() => this._toggleView());
+        this.input.onViewToggle((hoverPoint) => this._toggleView(hoverPoint));
         this.input.onViewShift((delta) => this._shiftView(delta));
+        // [MODIFIED] Tab 롱프레스 중 보드 위 마우스가 가리키는 칸을 하이라이트하기 위한 프리뷰 상태
+        this.tabHoverHighlight = null; // { x, y } in canvas CSS px, or null
+        this.input.onViewTogglePreview((active, x, y) => {
+            this.tabHoverHighlight = active ? { x, y } : null;
+        });
 
         // Start loop
         this.lastTime = performance.now();
@@ -71,6 +90,7 @@ class Game {
 
     _resize() {
         const dpr = window.devicePixelRatio || 1;
+        this.dpr = dpr; // [MODIFIED] Q/E 스냅샷 캔버스에도 동일한 dpr 변환을 적용하기 위해 보관
         const rect = this.container.getBoundingClientRect();
         this.width = rect.width;
         this.height = rect.height;
@@ -79,6 +99,10 @@ class Game {
         this.canvas.style.width = this.width + 'px';
         this.canvas.style.height = this.height + 'px';
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // [MODIFIED] Q/E 줌 트랜지션 스냅샷 캔버스도 메인 캔버스와 동일한 실 픽셀 크기로 유지
+        this.depthSnapshotCanvas.width = this.canvas.width;
+        this.depthSnapshotCanvas.height = this.canvas.height;
 
         if (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.ANIMATING) {
             this.level.calculateLayout(this.width, this.height);
@@ -108,12 +132,26 @@ class Game {
             if (dir > 0 && this.transitionAlpha >= this.transitionTarget) this.transitionAlpha = this.transitionTarget;
             if (dir < 0 && this.transitionAlpha <= this.transitionTarget) this.transitionAlpha = this.transitionTarget;
 
-            if (this.pendingViewChange && this.transitionAlpha >= 1) {
-                const change = this.pendingViewChange;
-                this.pendingViewChange = null;
-                change();
-                this.transitionTarget = 0;
-                this.transitionSpeed = 3;
+        }
+
+        // [MODIFIED] Q/E 줌 트랜지션 진행도 갱신
+        if (this.depthTransition) {
+            this.depthTransition.t += dt;
+            if (this.depthTransition.t >= this.depthTransition.duration) {
+                this.depthTransition = null;
+            }
+        }
+
+        // [MODIFIED] Tab 플립 트랜지션 진행도 갱신 -- 절반 지점에서 실제 뷰 축 교체 실행
+        if (this.flipTransition) {
+            const ft = this.flipTransition;
+            ft.t += dt;
+            if (!ft.applied && ft.t >= ft.duration / 2) {
+                ft.change();
+                ft.applied = true;
+            }
+            if (ft.t >= ft.duration) {
+                this.flipTransition = null;
             }
         }
 
@@ -176,31 +214,69 @@ class Game {
 
     // ── View (axis) switching ──
 
-    _toggleView() {
+    // [MODIFIED] Tab은 암전 페이드 대신 카드 플립(scaleX 1->0->1)으로 전환.
+    // 절반 지점(가장 얇아진 순간)에서 실제 뷰 축을 교체해, 뒷면이 뒤집히며 나타나는 것처럼 보이게 함.
+    // hoverPoint(롱프레스로 마우스가 가리키던 칸, 캔버스 CSS px)가 있으면 그 칸의 좌표를 새 뷰의 고정
+    // 슬라이스로 사용하고, 없으면(짧게 누름) 기존처럼 주인공 위치 기준.
+    _toggleView(hoverPoint = null) {
         if (this.state !== GAME_STATE.PLAYING) return;
-        if (this.pendingViewChange) return;
+        if (this.depthTransition || this.flipTransition) return;
 
-        this.pendingViewChange = () => {
-            // Reset the fixed slice to wherever the player currently is on the new axis.
-            const nextAxis = this.level.viewAxis === 'z' ? 'x' : 'z';
-            const index = nextAxis === 'z' ? this.player.gridZ : this.player.gridX;
-            this.level.setView(nextAxis, index);
-            this.level.calculateLayout(this.width, this.height);
+        this.flipTransition = {
+            t: 0,
+            duration: this.flipTransitionDuration,
+            applied: false,
+            change: () => {
+                const nextAxis = this.level.viewAxis === 'z' ? 'x' : 'z';
+                const index = this._resolveToggleSlice(nextAxis, hoverPoint);
+                this.level.setView(nextAxis, index);
+                this.level.calculateLayout(this.width, this.height);
+            },
         };
-        this.transitionSpeed = 8;
-        this.transitionTarget = 1;
     }
 
+    // hoverPoint를 현재(전환 전) 뷰 기준 보드 셀로 변환해 grid 좌표를 구하고, 그중 새 축(nextAxis)에
+    // 해당하는 좌표값을 돌려줌. hoverPoint가 없거나 보드 밖이면 주인공 위치로 폴백.
+    _resolveToggleSlice(nextAxis, hoverPoint) {
+        if (hoverPoint) {
+            const level = this.level;
+            if (level.tileSize) {
+                const col = Math.floor((hoverPoint.x - level.offsetX) / level.tileSize);
+                const row = Math.floor((hoverPoint.y - level.offsetY) / level.tileSize);
+                const { cols, rows } = level.getViewDimensions();
+                if (col >= 0 && row >= 0 && col < cols && row < rows) {
+                    const g = level.viewToGrid(col, row);
+                    return nextAxis === 'z' ? g.z : g.x;
+                }
+            }
+        }
+        return nextAxis === 'z' ? this.player.gridZ : this.player.gridX;
+    }
+
+    // Q/E는 방향성 줌+크로스페이드로 전환.
+    // 진행(E, delta>0)이면 새 슬라이스는 크게 시작해 1.0으로 줄어들며 다가오고,
+    // 기존 화면은 반대 방향인 축소(1.0->작게)로 사라짐. 후진(Q)은 그 반대.
     _shiftView(delta) {
         if (this.state !== GAME_STATE.PLAYING) return;
-        if (this.pendingViewChange) return;
+        if (this.depthTransition || this.flipTransition) return;
+        // [MODIFIED] 경계라 실제로 슬라이스가 안 바뀌면 스냅샷/트랜지션 자체를 시작하지 않음(시각 효과 억제)
+        if (!this.level.canShiftView(delta)) return;
 
-        this.pendingViewChange = () => {
-            this.level.shiftView(delta);
-            this.level.calculateLayout(this.width, this.height);
+        // [MODIFIED] 배경은 스냅샷에 넣지 않음 -- 보드(패널+타일+파티클+플레이어)만 투명 배경에 그려서
+        // 나중에 스케일/페이드해도 배경이 같이 축소되거나 이중으로 겹쳐 보이지 않게 함.
+        this.depthSnapshotCtx.clearRect(0, 0, this.depthSnapshotCanvas.width, this.depthSnapshotCanvas.height);
+        this.depthSnapshotCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        this._drawBoardSnapshot(this.depthSnapshotCtx);
+
+        this.level.shiftView(delta);
+        this.level.calculateLayout(this.width, this.height);
+
+        this.depthTransition = {
+            t: 0,
+            duration: this.depthTransitionDuration,
+            // [MODIFIED] 줌 방향 반전 요청 -- E(전진)에서 새 슬라이스가 작게 시작해 커지고, 기존은 확대되며 사라지게
+            direction: delta >= 0 ? -1 : 1,
         };
-        this.transitionSpeed = 8;
-        this.transitionTarget = 1;
     }
 
     // ── State Transitions ──
@@ -300,13 +376,26 @@ class Game {
 
     // Resolve a screen-space swipe direction to a 3D grid delta for whichever
     // plane (X-Y or Z-Y) is currently in view.
+    // [MODIFIED] 화면 대칭(미러) 설정이 켜져 있으면 스와이프 방향이 실제로 향하는 축 부호를 반전시켜서,
+    // 렌더링이 반전된 화면과 조작 방향이 항상 일치하게 함(자석/얼음 등 하류 로직은 축만 보고 부호는 안 봐서 영향 없음).
     _moveDelta(direction) {
-        const table = VIEW_DIR_3D[this.level.viewAxis] || VIEW_DIR_3D.z;
-        return table[direction] || null;
+        const axis = this.level.viewAxis;
+        const table = VIEW_DIR_3D[axis] || VIEW_DIR_3D.z;
+        const base = table[direction];
+        if (!base) return null;
+
+        const mirror = this.level.mirror[axis];
+        let { dx, dy, dz } = base;
+        if (mirror.h) {
+            if (axis === 'x') dz = -dz; else dx = -dx;
+        }
+        if (mirror.v) dy = -dy;
+        return { dx, dy, dz };
     }
 
     _movePlayer(direction) {
         if (this.player.isMoving) return;
+        if (this.depthTransition || this.flipTransition) return; // [MODIFIED] 뷰 트랜지션 중 이동 입력이 겹쳐 보이지 않도록 차단
 
         const delta = this._moveDelta(direction);
         if (!delta) return;
@@ -657,6 +746,62 @@ class Game {
         return 36;
     }
 
+    // ── Settings (view mirroring, sound) ──
+
+    // [MODIFIED] 저장된 대칭/효과음 설정을 불러와 level.mirror·audio.enabled에 반영하고,
+    // 사이드바 설정 카드의 체크박스 초기값/변경 이벤트를 연결
+    _setupSettingsUI() {
+        const settings = this._loadSettings();
+        this.level.mirror.z.h = settings.mirrorZH;
+        this.level.mirror.z.v = settings.mirrorZV;
+        this.level.mirror.x.h = settings.mirrorXH;
+        this.level.mirror.x.v = settings.mirrorXV;
+        this.audio.enabled = settings.soundOn;
+
+        const bind = (id, initial, apply) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.checked = initial;
+            el.addEventListener('change', () => {
+                apply(el.checked);
+                this._saveSettings();
+            });
+        };
+
+        bind('setting-mirror-z-h', settings.mirrorZH, (v) => { this.level.mirror.z.h = v; });
+        bind('setting-mirror-z-v', settings.mirrorZV, (v) => { this.level.mirror.z.v = v; });
+        bind('setting-mirror-x-h', settings.mirrorXH, (v) => { this.level.mirror.x.h = v; });
+        bind('setting-mirror-x-v', settings.mirrorXV, (v) => { this.level.mirror.x.v = v; });
+        bind('setting-sound', settings.soundOn, (v) => { this.audio.enabled = v; });
+    }
+
+    _currentSettings() {
+        return {
+            mirrorZH: this.level.mirror.z.h,
+            mirrorZV: this.level.mirror.z.v,
+            mirrorXH: this.level.mirror.x.h,
+            mirrorXV: this.level.mirror.x.v,
+            soundOn: this.audio.enabled,
+        };
+    }
+
+    _saveSettings() {
+        try {
+            localStorage.setItem('jelle_settings', JSON.stringify(this._currentSettings()));
+        } catch (e) { /* ignore */ }
+    }
+
+    _loadSettings() {
+        const defaults = { mirrorZH: false, mirrorZV: false, mirrorXH: false, mirrorXV: false, soundOn: true };
+        try {
+            const raw = localStorage.getItem('jelle_settings');
+            if (!raw) return defaults;
+            return { ...defaults, ...JSON.parse(raw) };
+        } catch (e) {
+            return defaults;
+        }
+    }
+
     // ── Rendering ──
 
     _render() {
@@ -684,7 +829,13 @@ class Game {
 
             case GAME_STATE.PLAYING:
             case GAME_STATE.ANIMATING:
-                this._renderGame(ctx, w, h);
+                if (this.depthTransition) {
+                    this._renderDepthTransition(ctx, w, h);
+                } else if (this.flipTransition) {
+                    this._renderFlipTransition(ctx, w, h);
+                } else {
+                    this._renderGame(ctx, w, h);
+                }
                 break;
 
             case GAME_STATE.LEVEL_CLEAR:
@@ -700,6 +851,81 @@ class Game {
         }
 
         ctx.restore();
+    }
+
+    // [MODIFIED] Q/E 슬라이스 전환용 방향성 줌+크로스페이드 렌더.
+    // 새 슬라이스(라이브 렌더)는 진행 방향에서 다가오듯 큰 배율에서 1.0으로,
+    // 이전 슬라이스(스냅샷)는 그 반대 배율로 멀어지며 페이드아웃.
+    _renderDepthTransition(ctx, w, h) {
+        const trans = this.depthTransition;
+        const p = Math.min(1, trans.t / trans.duration);
+        const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+        const dir = trans.direction;
+        const zoomAmount = 0.4;
+        const cx = w / 2, cy = h / 2;
+
+        const newStartScale = 1 + zoomAmount * dir;
+        const newScale = newStartScale + (1 - newStartScale) * eased;
+        const oldEndScale = 1 - zoomAmount * dir;
+        const oldScale = 1 + (oldEndScale - 1) * eased;
+
+        // [MODIFIED] 배경은 트랜지션과 무관하게 항상 고정으로 한 번만 그림 (맵 보드만 확대/축소 대상)
+        this.level.renderBackground(ctx, w, h);
+
+        // New (live) board underneath, zooming in from newStartScale to 1 while fading in.
+        ctx.save();
+        ctx.globalAlpha = eased;
+        ctx.translate(cx, cy);
+        ctx.scale(newScale, newScale);
+        ctx.translate(-cx, -cy);
+        this._renderBoardLayer(ctx, w, h);
+        ctx.restore();
+
+        // Old (snapshot) board on top, zooming toward oldEndScale while fading out.
+        ctx.save();
+        ctx.globalAlpha = 1 - eased;
+        ctx.translate(cx, cy);
+        ctx.scale(oldScale, oldScale);
+        ctx.translate(-cx, -cy);
+        ctx.drawImage(this.depthSnapshotCanvas, 0, 0, w, h);
+        ctx.restore();
+
+        this._updateHUD();
+        this.sidebarUI.render(this.level, this.player);
+        this._renderTutorial(ctx, w, h);
+    }
+
+    // [MODIFIED] Tab 축 전환용 카드 플립 렌더.
+    // 전반부는 아직 안 바뀐(old) 뷰가 scaleX 1->0으로 얇아지고,
+    // 절반 지점에서 _update가 실제 뷰를 교체한 뒤, 후반부는 새 뷰가 0->1로 펼쳐짐.
+    // 가장 얇아지는 순간(옆면) 근처에서 살짝 어둡게 해 입체감을 더함.
+    _renderFlipTransition(ctx, w, h) {
+        const ft = this.flipTransition;
+        const half = ft.duration / 2;
+        const p = ft.t < half ? ft.t / half : (ft.t - half) / half;
+        const rawScaleX = ft.t < half ? 1 - p : p;
+        const scaleX = Math.max(0.02, rawScaleX); // keep transform non-degenerate
+        const dimAlpha = (1 - scaleX) * 0.35;
+        const cx = w / 2, cy = h / 2;
+
+        // [MODIFIED] 배경은 플립과 무관하게 항상 고정으로 한 번만 그림 (맵 보드만 뒤집힘 대상)
+        this.level.renderBackground(ctx, w, h);
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(scaleX, 1);
+        ctx.translate(-cx, -cy);
+        this._renderBoardLayer(ctx, w, h);
+        ctx.restore();
+
+        if (dimAlpha > 0.01) {
+            ctx.fillStyle = `rgba(5,10,20,${dimAlpha})`;
+            ctx.fillRect(0, 0, w, h);
+        }
+
+        this._updateHUD();
+        this.sidebarUI.render(this.level, this.player);
+        this._renderTutorial(ctx, w, h);
     }
 
     _renderTitle(ctx, w, h) {
@@ -812,8 +1038,50 @@ class Game {
     }
 
     _renderGame(ctx, w, h) {
-        // Level grid
-        this.level.render(ctx, w, h);
+        // [MODIFIED] 배경(그라디언트+격자)은 Q/E·Tab 트랜지션에서 항상 고정으로 그려야 해서 보드 렌더와 분리
+        this.level.renderBackground(ctx, w, h);
+        this._renderBoardLayer(ctx, w, h);
+        // [MODIFIED] Tab 롱프레스로 전환을 준비 중일 때 마우스가 가리키는 칸을 하이라이트
+        this._renderTabHoverHighlight(ctx);
+
+        // HUD (DOM-based, updated separately from render)
+        this._updateHUD();
+        // [MODIFIED] 이동 애니메이션과 Tab/Q/E 시점 변경을 현재 프레임의 사이드바에 실시간 반영
+        this.sidebarUI.render(this.level, this.player);
+
+        this._renderTutorial(ctx, w, h);
+    }
+
+    // Tab을 길게 눌러 전환을 준비 중일 때(Input.viewTogglePreviewCallback), 마우스 아래 보드 칸에
+    // 테두리 글로우를 그려서 "곧 전환됨"을 시각적으로 미리 보여줌. 하이라이트 자체는 축/슬라이스 선택에는
+    // 관여하지 않음(전환 결과는 항상 기존과 동일하게 반대 축으로 토글).
+    _renderTabHoverHighlight(ctx) {
+        if (!this.tabHoverHighlight) return;
+        const level = this.level;
+        if (!level.tileSize) return;
+
+        const { x, y } = this.tabHoverHighlight;
+        const col = Math.floor((x - level.offsetX) / level.tileSize);
+        const row = Math.floor((y - level.offsetY) / level.tileSize);
+        const { cols, rows } = level.getViewDimensions();
+        if (col < 0 || row < 0 || col >= cols || row >= rows) return;
+
+        const px = level.offsetX + col * level.tileSize;
+        const py = level.offsetY + row * level.tileSize;
+
+        ctx.save();
+        ctx.strokeStyle = '#78FFD6';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#78FFD6';
+        ctx.shadowBlur = 12;
+        ctx.strokeRect(px + 1.5, py + 1.5, level.tileSize - 3, level.tileSize - 3);
+        ctx.restore();
+    }
+
+    // [MODIFIED] 맵 보드(패널+타일+파티클+플레이어)만 그리는 레이어.
+    // Q/E 줌, Tab 플립 트랜지션이 배경은 그대로 두고 이 레이어만 스케일/페이드하기 위해 분리.
+    _renderBoardLayer(ctx, w, h) {
+        this.level.renderBoard(ctx);
 
         // Portal particles (only if the portal's own layer is currently in view)
         const portalPos = this.level.gridToPixelIfVisible(
@@ -853,17 +1121,20 @@ class Game {
 
         // Player
         this.player.render(ctx, this.level);
+    }
 
-        // HUD (DOM-based, updated separately from render)
-        this._updateHUD();
-        // [MODIFIED] 이동 애니메이션과 Tab/Q/E 시점 변경을 현재 프레임의 사이드바에 실시간 반영
-        this.sidebarUI.render(this.level, this.player);
+    // Board-only redraw with no new particle emission -- used solely to capture the
+    // Q/E depth-transition snapshot, so the frozen "old" layer doesn't keep spawning particles.
+    _drawBoardSnapshot(ctx) {
+        this.level.renderBoard(ctx);
+        this.particles.render(ctx);
+        this.player.render(ctx, this.level);
+    }
 
-        // Tutorial
+    _renderTutorial(ctx, w, h) {
         if (this.tutorialAlpha > 0.01) {
             ctx.globalAlpha = this.tutorialAlpha * 0.9;
             ctx.fillStyle = 'rgba(10,10,26,0.7)';
-            const tw = ctx.measureText(this.tutorialMsg).width + 40;
 
             ctx.font = '13px "Orbitron", sans-serif';
             const textW = ctx.measureText(this.tutorialMsg).width + 40;

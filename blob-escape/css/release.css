@@ -243,7 +243,8 @@ kbd,
 .sidebar-card {
     position: relative;
     overflow: hidden;
-    padding: 15px;
+    /* [MODIFIED] 설정 카드까지 한 화면에 들어오도록 여백 축소 */
+    padding: 12px;
     border: 1px solid rgba(118, 158, 197, 0.14);
     border-radius: 16px;
     background:
@@ -264,11 +265,11 @@ kbd,
 }
 
 .sidebar-card + .sidebar-card {
-    margin-top: 14px;
+    margin-top: 10px;
 }
 
 .sidebar-heading {
-    margin-bottom: 11px;
+    margin-bottom: 8px;
 }
 
 .sidebar-kicker {
@@ -284,7 +285,8 @@ kbd,
 }
 
 #map-orientation {
-    height: 150px;
+    /* [MODIFIED] 설정 카드까지 한 화면에 들어오도록 축소 */
+    height: 108px;
     border-radius: 10px;
     background: radial-gradient(circle at 50% 40%, rgba(47, 137, 131, 0.08), transparent 68%);
 }
@@ -309,7 +311,8 @@ kbd,
 }
 
 .minimap-viewport {
-    height: 174px;
+    /* [MODIFIED] 설정 카드까지 한 화면에 들어오도록 축소 */
+    height: 128px;
     border: 1px solid rgba(98, 139, 177, 0.12);
     border-radius: 12px;
     background:
@@ -339,6 +342,89 @@ kbd,
 .legend-goal {
     border-color: var(--violet);
     box-shadow: 0 0 8px var(--violet);
+}
+
+/* [MODIFIED] Q/E·Tab 화면 대칭 여부와 효과음을 고르는 설정 카드용 토글 스위치.
+   소제목(라벨)은 자기 줄을 갖고, 그 아래 토글들만 가로 한 줄로 배치해 한 화면에 들어오게 함 */
+.settings-group + .settings-group {
+    margin-top: 8px;
+}
+
+.settings-group-label {
+    margin-bottom: 5px;
+    color: var(--muted);
+    font: 700 8px/1 'Orbitron', sans-serif;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.settings-toggle-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 16px;
+}
+
+.settings-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.settings-toggle input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.settings-toggle-track {
+    position: relative;
+    flex: 0 0 auto;
+    width: 30px;
+    height: 16px;
+    border: 1px solid rgba(134, 170, 205, 0.22);
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(38, 55, 79, 0.75), rgba(15, 25, 43, 0.75));
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.settings-toggle-track::after {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #7a8cab;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    content: '';
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.settings-toggle input:checked + .settings-toggle-track {
+    border-color: var(--line-hot);
+    background: linear-gradient(180deg, rgba(54, 200, 157, 0.35), rgba(20, 60, 48, 0.55));
+}
+
+.settings-toggle input:checked + .settings-toggle-track::after {
+    background: var(--mint);
+    box-shadow: 0 0 8px rgba(120, 255, 214, 0.7);
+    transform: translateX(14px);
+}
+
+.settings-toggle input:focus-visible + .settings-toggle-track {
+    outline: 2px solid var(--mint);
+    outline-offset: 2px;
+}
+
+.settings-toggle-label {
+    color: var(--text);
+    font: 500 11px/1 'Space Grotesk', sans-serif;
 }
 
 /* [MODIFIED] 레벨 선택을 단순 목록이 아니라 탐사 구역 선택 화면으로 시각화 */
