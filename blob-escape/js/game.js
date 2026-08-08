@@ -44,6 +44,9 @@ class Game {
         this.clearTimer = 0;
         this.tutorialMsg = '';
         this.tutorialAlpha = 0;
+        this.tutorialDialog = null;
+        this.tutorialDialogIndex = 0;
+        this.tutorialDialogVisible = false;
         this.screenShake = 0;
         this.time = 0;
 
@@ -59,6 +62,9 @@ class Game {
         this.input.onTap((x, y) => this._handleTap(x, y));
         this.input.onViewToggle(() => this._toggleView());
         this.input.onViewShift((delta) => this._shiftView(delta));
+
+        this.tutorialUI = new Tutorial();
+        this._tutorialPending = false;
 
         // Start loop
         this.lastTime = performance.now();
@@ -149,6 +155,12 @@ class Game {
     // ── Input ──
 
     _onSwipe(direction) {
+        if (this.tutorialDialogVisible) return;
+        if (this._tutorialPending) {
+            this._closeTutorial();
+            return;
+        }
+
         switch (this.state) {
             case GAME_STATE.TITLE:
                 this._startLevelSelect();
@@ -255,16 +267,31 @@ class Game {
         this.transitionAlpha = 1;
         this.transitionTarget = 0;
 
-        // Tutorial messages
-        const messages = [
-            'Swipe to slide JELL-E!',
-            'Hit the Metal wall to gain Magnet power!',
-            'Hit the Glass wall to gain Slippery power!',
-            'Hit the Rubber wall to gain Bouncy power!',
-            'Hit the Electric wall to gain Electric power!',
-        ];
-        this.tutorialMsg = messages[index] || '';
-        setTimeout(() => { this.tutorialMsg = ''; }, 4000);
+        this.tutorialAlpha = 0;
+        this.tutorialMsg = '';
+        this.tutorialDialogIndex = 0;
+        this.tutorialDialogVisible = false;
+
+        const data = this.level.levelData;
+        if (data.tutorial && Array.isArray(data.tutorial) && data.tutorial.length > 0) {
+            this.tutorialDialog = null;
+            this.tutorialDialogVisible = false;
+            this.tutorialMsg = '';
+            this.input.disable();
+            requestAnimationFrame(() => this._showTutorial(data.tutorial));
+        } else {
+            if (data.tutorialDialog && data.tutorialDialog.length > 0) {
+                this.tutorialDialog = data.tutorialDialog;
+                this.tutorialDialogVisible = true;
+            } else {
+                this.tutorialDialog = null;
+            }
+
+            this.tutorialMsg = data.tutorialHint || '';
+            if (this.tutorialMsg) {
+                setTimeout(() => { this.tutorialMsg = ''; }, 6000);
+            }
+        }
     }
 
     _nextLevel() {
@@ -821,25 +848,63 @@ class Game {
         // HUD (DOM-based, updated separately from render)
         this._updateHUD();
 
-        // Tutorial
-        if (this.tutorialAlpha > 0.01) {
+        // Tutorial HUD
+        if (!this._tutorialPending && this.tutorialAlpha > 0.01 && this.tutorialMsg) {
             ctx.globalAlpha = this.tutorialAlpha * 0.9;
-            ctx.fillStyle = 'rgba(10,10,26,0.7)';
-            const tw = ctx.measureText(this.tutorialMsg).width + 40;
-
+            ctx.fillStyle = 'rgba(10,10,26,0.75)';
             ctx.font = '13px "Orbitron", sans-serif';
-            const textW = ctx.measureText(this.tutorialMsg).width + 40;
+            const textW = ctx.measureText(this.tutorialMsg).width + 48;
             const tx = (w - textW) / 2;
-            const ty = this.height - 70;
+            const ty = this.height - 90;
 
-            this._roundRect(ctx, tx, ty, textW, 36, 18);
+            this._roundRect(ctx, tx, ty, textW, 44, 20);
             ctx.fill();
 
-            ctx.fillStyle = '#ccc';
+            ctx.fillStyle = '#eee';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(this.tutorialMsg, w / 2, ty + 18);
+            ctx.fillText(this.tutorialMsg, w / 2, ty + 22);
             ctx.globalAlpha = 1;
+        }
+
+        if (this.tutorialDialogVisible && this.tutorialDialog) {
+            const dialog = this.tutorialDialog[this.tutorialDialogIndex];
+            if (dialog) {
+                ctx.globalAlpha = 0.95;
+                ctx.fillStyle = 'rgba(6, 18, 35, 0.95)';
+                const padding = 24;
+                const lineHeight = 24;
+                const lines = dialog.text.split('\n');
+                let maxWidth = 0;
+                ctx.font = '15px "Orbitron", sans-serif';
+                lines.forEach(line => {
+                    maxWidth = Math.max(maxWidth, ctx.measureText(line).width);
+                });
+                const boxW = Math.min(w - 80, maxWidth + padding * 2);
+                const boxH = lines.length * lineHeight + padding * 2 + 20;
+                const boxX = (w - boxW) / 2;
+                const boxY = h - boxH - 40;
+
+                this._roundRect(ctx, boxX, boxY, boxW, boxH, 20);
+                ctx.fill();
+
+                ctx.fillStyle = '#82F0FF';
+                ctx.font = 'bold 16px "Orbitron", sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText(dialog.speaker, boxX + padding, boxY + padding);
+
+                ctx.fillStyle = '#f2f2f2';
+                ctx.font = '14px "Orbitron", sans-serif';
+                lines.forEach((line, index) => {
+                    ctx.fillText(line, boxX + padding, boxY + padding + 28 + index * lineHeight);
+                });
+
+                ctx.fillStyle = '#888';
+                ctx.font = '12px "Orbitron", sans-serif';
+                ctx.fillText('Tap to continue', boxX + padding, boxY + boxH - padding - 12);
+                ctx.globalAlpha = 1;
+            }
         }
     }
 
@@ -859,6 +924,45 @@ class Game {
         if (this.state === GAME_STATE.TITLE) {
             this._startLevelSelect();
             return;
+        }
+
+        if (this.tutorialDialogVisible) {
+            this._advanceTutorialDialog();
+            return;
+        }
+
+        if (this._tutorialPending) {
+            this._closeTutorial();
+            return;
+        }
+    }
+
+    _advanceTutorialDialog() {
+        if (!this.tutorialDialog) return;
+
+        this.tutorialDialogIndex += 1;
+        if (this.tutorialDialogIndex >= this.tutorialDialog.length) {
+            this.tutorialDialogVisible = false;
+            this.tutorialDialog = null;
+            return;
+        }
+    }
+
+    _showTutorial(ids) {
+        this._tutorialPending = true;
+        this.input.disable();
+        this.tutorialAlpha = 0;
+        this.tutorialMsg = '';
+        this.tutorialUI.show(ids, () => this._closeTutorial());
+    }
+
+    _closeTutorial() {
+        this._tutorialPending = false;
+        this.input.enable();
+        this.state = GAME_STATE.PLAYING;
+        this.tutorialMsg = this.level.levelData.tutorialHint || '';
+        if (this.tutorialMsg) {
+            setTimeout(() => { this.tutorialMsg = ''; }, 6000);
         }
     }
 

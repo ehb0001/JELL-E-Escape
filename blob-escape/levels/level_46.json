@@ -1,0 +1,23 @@
+{
+  "id": 46,
+  "name": "Tutorial: Electric Door",
+  "subtitle": "A door blocks the path unless you are electric.",
+  "tutorial": ["electric_door"],
+  "tutorialHint": "Move right, then up, then right again to reach the portal after opening the door.",
+  "tutorialDialog": [
+    {
+      "speaker": "영삼",
+      "text": "전기 문은 전기 상태가 아니면 통과할 수 없다.\n먼저 오른쪽으로 가서 전기 문을 열고,\n그다음 위쪽으로 나아가자."
+    }
+  ],
+  "map": [
+    [
+      "#########",
+      "#P.D...X#",
+      "#.......#",
+      "#.......#",
+      "#.......#",
+      "#########"
+    ]
+  ]
+}
