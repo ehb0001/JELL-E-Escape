@@ -46,6 +46,13 @@ class Level {
         this.viewZ = 0;
         this.viewX = 0;
 
+        // [MODIFIED] 설정에서 켜고 끄는 화면 대칭(미러) 상태 -- 사용자 취향이라 load()에서 리셋하지 않음.
+        // z: X-Y 뷰(h=X축 반전, v=Y축 반전), x: Z-Y 뷰(h=Z축 반전, v=Y축 반전)
+        this.mirror = {
+            z: { h: false, v: false },
+            x: { h: false, v: false },
+        };
+
         // Effects state
         this.rubberHitMap = new Map(); // "x,y,z" -> timer
     }
@@ -114,6 +121,16 @@ class Level {
         }
     }
 
+    // [MODIFIED] Q/E 트랜지션을 시작하기 전에 실제로 슬라이스가 바뀔지(경계 클램프로 no-op이 아닌지) 확인
+    canShiftView(delta) {
+        if (this.viewAxis === 'x') {
+            const next = Math.max(0, Math.min(this.width - 1, this.viewX + delta));
+            return next !== this.viewX;
+        }
+        const next = Math.max(0, Math.min(this.depth - 1, this.viewZ + delta));
+        return next !== this.viewZ;
+    }
+
     // Dimensions of the currently visible 2D plane, in (col, row) terms.
     // The X-view (Z-Y plane) is rendered rotated 90° clockwise from its
     // natural Z-Y layout, so cols/rows swap to depth/height.
@@ -125,9 +142,15 @@ class Level {
     // Map a point on the current 2D plane (col, row) to full 3D grid coords.
     // X-view is rotated 90° CW from its natural (col=y, row=z) layout:
     // screen-right is -Z (Z decreases rightward), screen-down is +Y.
+    // [MODIFIED] mirror.h/v flips screen col/row BEFORE the rotation mapping below,
+    // so the h/v flip always means "left-right"/"up-down" on screen regardless of view.
     viewToGrid(col, row) {
-        if (this.viewAxis === 'x') return { x: this.viewX, y: row, z: this.depth - 1 - col };
-        return { x: col, y: row, z: this.viewZ };
+        const { cols, rows } = this.getViewDimensions();
+        const mirror = this.mirror[this.viewAxis];
+        const c = mirror.h ? (cols - 1 - col) : col;
+        const r = mirror.v ? (rows - 1 - row) : row;
+        if (this.viewAxis === 'x') return { x: this.viewX, y: r, z: this.depth - 1 - c };
+        return { x: c, y: r, z: this.viewZ };
     }
 
     // Inverse of viewToGrid: map full 3D grid coords to the current 2D plane (col, row).
@@ -136,12 +159,21 @@ class Level {
     // the current view is checked against the view's slice (rounded), so
     // movement animations along the two free axes stay smooth.
     gridToView(x, y, z) {
+        const { cols, rows } = this.getViewDimensions();
+        const mirror = this.mirror[this.viewAxis];
+        let col, row;
         if (this.viewAxis === 'x') {
             if (Math.round(x) !== this.viewX) return null;
-            return { col: this.depth - 1 - z, row: y };
+            col = this.depth - 1 - z;
+            row = y;
+        } else {
+            if (Math.round(z) !== this.viewZ) return null;
+            col = x;
+            row = y;
         }
-        if (Math.round(z) !== this.viewZ) return null;
-        return { col: x, row: y };
+        if (mirror.h) col = cols - 1 - col;
+        if (mirror.v) row = rows - 1 - row;
+        return { col, row };
     }
 
     // Convenience: grid coords -> pixel position on the current view, or null
@@ -168,6 +200,28 @@ class Level {
         if (this.extinguishedFire.has(key)) return TILE.WALL;
         if (this.consumedItems.has(key)) return TILE.FLOOR;
         return this.grid[z][y][x];
+    }
+
+    // [MODIFIED] 이 바닥(TILE.FLOOR) 또는 아이템 칸 위에서, E로 가는 다음 슬라이스의 같은 자리가 지나다닐 수
+    // 있는 곳(바닥/포탈/아이템 -- 벽은 절대 아님)이면 계속 이어지는 샤프트로 보고, 바닥 타일(또는 아이템 밑
+    // 바닥 백드롭)을 그리지 않아 게임 배경이 비쳐 보이게 함. 벽 타일은 이 규칙 대상이 아니라 항상 그대로 렌더링됨.
+    // E가 바꾸는 축은 현재 뷰에 따라 다름(X-Y 뷰는 viewZ, Z-Y 뷰는 viewX) -- viewAxis 기준으로 맞춰서 다음 칸을 계산.
+    // 게임플레이(이동/충돌)는 그대로 원래 타일로 취급되므로 영향 없음, 순수 렌더링 판단용.
+    isOpenShaftCell(x, y, z) {
+        const tile = this.getTile(x, y, z);
+        if (tile !== TILE.FLOOR && !isItem(tile)) return false;
+
+        let nextTile;
+        if (this.viewAxis === 'x') {
+            const nextX = x + 1;
+            if (nextX >= this.width) return false;
+            nextTile = this.getTile(nextX, y, z);
+        } else {
+            const nextZ = z + 1;
+            if (nextZ >= this.depth) return false;
+            nextTile = this.getTile(x, y, nextZ);
+        }
+        return nextTile === TILE.FLOOR || nextTile === TILE.PORTAL || isItem(nextTile);
     }
 
     consumeItem(x, y, z = this.viewZ) {
@@ -209,7 +263,14 @@ class Level {
     }
 
     render(ctx, canvasWidth, canvasHeight) {
-        // [MODIFIED] 맵이 공중에 떠 있는 실험실 홀로그램 보드처럼 보이도록 배경·프레임·깊이감을 추가
+        this.renderBackground(ctx, canvasWidth, canvasHeight);
+        this.renderBoard(ctx);
+    }
+
+    // [MODIFIED] Q/E·Tab 뷰 트랜지션이 배경(실험실 홀로그램 그라디언트+격자)은 건드리지 않고
+    // 보드(패널+타일)만 확대/축소·플립하도록 배경과 보드 렌더를 분리.
+    // 맵이 공중에 떠 있는 실험실 홀로그램 보드처럼 보이도록 배경·프레임·깊이감을 추가한 부분은 이 안에 유지.
+    renderBackground(ctx, canvasWidth, canvasHeight) {
         const background = ctx.createRadialGradient(
             canvasWidth * 0.48, canvasHeight * 0.42, 0,
             canvasWidth * 0.48, canvasHeight * 0.42, Math.max(canvasWidth, canvasHeight) * 0.72
@@ -219,10 +280,6 @@ class Level {
         background.addColorStop(1, '#040711');
         ctx.fillStyle = background;
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-        const { cols, rows } = this.getViewDimensions();
-        const boardW = cols * this.tileSize;
-        const boardH = rows * this.tileSize;
 
         ctx.save();
         ctx.strokeStyle = 'rgba(73, 123, 158, 0.055)';
@@ -234,6 +291,17 @@ class Level {
         for (let y = (this.offsetY % ambientGrid); y < canvasHeight; y += ambientGrid) {
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvasWidth, y); ctx.stroke();
         }
+        ctx.restore();
+    }
+
+    // Board panel (glow frame) + the actual tile grid -- this is the part that
+    // Q/E and Tab transitions scale/flip, so it must not draw the full-canvas background.
+    renderBoard(ctx) {
+        const { cols, rows } = this.getViewDimensions();
+        const boardW = cols * this.tileSize;
+        const boardH = rows * this.tileSize;
+
+        ctx.save();
         ctx.shadowColor = 'rgba(66, 201, 255, 0.18)';
         ctx.shadowBlur = 28;
         ctx.fillStyle = 'rgba(5, 11, 24, 0.92)';
@@ -255,6 +323,12 @@ class Level {
     }
 
     _renderTile(ctx, tile, px, py, s, gx, gy, gz = this.viewZ) {
+        // [MODIFIED] 이 바닥 칸과 다음 슬라이스(E 방향)의 같은 자리가 지나다닐 수 있는 곳(바닥/포탈/아이템)이면
+        // 위아래로 이어지는 샤프트로 보고 타일을 그리지 않아 게임 배경이 비쳐 보이게 함. 벽 타일은 항상 그대로 렌더링.
+        if (tile === TILE.FLOOR && this.isOpenShaftCell(gx, gy, gz)) return;
+        // 아이템도 같은 샤프트 조건이면 아이콘은 그대로 그리되 밑에 깔리는 바닥 백드롭만 빼서 배경이 비치게 함.
+        const skipItemBackdrop = isItem(tile) && this.isOpenShaftCell(gx, gy, gz);
+
         const gap = 1;
         const innerX = px + gap;
         const innerY = py + gap;
@@ -263,7 +337,7 @@ class Level {
         ctx.save();
 
         // Base floor for items and doors
-        if (isItem(tile) || tile === TILE.PORTAL || tile === TILE.ELECTRIC_DOOR) {
+        if ((isItem(tile) && !skipItemBackdrop) || tile === TILE.PORTAL || tile === TILE.ELECTRIC_DOOR) {
             ctx.fillStyle = TILE_COLORS[TILE.FLOOR].fill;
             ctx.fillRect(innerX, innerY, innerS, innerS);
         }

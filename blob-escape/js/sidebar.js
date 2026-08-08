@@ -164,33 +164,27 @@ class SidebarMapUI {
         const { ctx, width, height } = this._prepareCanvas(this.minimapCanvas, cssWidth, cssHeight);
         const cellW = width / level.width;
         const cellH = height / level.depth;
+        // [MODIFIED] 탑뷰 미니맵 상하 반전 -- z=0 층이 아래쪽에 오도록 세로 위치를 뒤집어서 그림
+        const flipZTop = (z) => (level.depth - 1 - z) * cellH;
 
         ctx.fillStyle = '#081225';
         ctx.fillRect(0, 0, width, height);
 
+        // [MODIFIED] 벽/통로 색구분(칸별 hasWalkable/hasWall 스캔) 제거 -- 공간 구조 노출 없이
+        // 단일 타일 색으로만 채우고, 위치 정보는 아래 슬라이스 하이라이트/목표/플레이어 마커로만 표시
+        ctx.fillStyle = 'rgba(24, 39, 65, 0.7)';
         for (let z = 0; z < level.depth; z++) {
             for (let x = 0; x < level.width; x++) {
-                let hasWalkable = false;
-                let hasWall = false;
-                for (let y = 0; y < level.height; y++) {
-                    const tile = level.getTile(x, y, z);
-                    if (isWall(tile)) hasWall = true;
-                    else hasWalkable = true;
-                }
-
-                if (hasWalkable) ctx.fillStyle = 'rgba(45, 78, 105, 0.78)';
-                else if (hasWall) ctx.fillStyle = 'rgba(24, 39, 65, 0.86)';
-                else ctx.fillStyle = 'rgba(7, 15, 31, 0.94)';
-                ctx.fillRect(x * cellW, z * cellH, Math.ceil(cellW), Math.ceil(cellH));
+                ctx.fillRect(x * cellW, flipZTop(z), Math.ceil(cellW), Math.ceil(cellH));
             }
         }
 
         if (level.viewAxis === 'z') {
             ctx.fillStyle = 'rgba(120, 255, 214, 0.14)';
-            ctx.fillRect(0, level.viewZ * cellH, width, cellH);
+            ctx.fillRect(0, flipZTop(level.viewZ), width, cellH);
             ctx.strokeStyle = 'rgba(120, 255, 214, 0.8)';
             ctx.lineWidth = 1;
-            ctx.strokeRect(0.5, level.viewZ * cellH + 0.5, width - 1, Math.max(1, cellH - 1));
+            ctx.strokeRect(0.5, flipZTop(level.viewZ) + 0.5, width - 1, Math.max(1, cellH - 1));
         } else {
             ctx.fillStyle = 'rgba(120, 255, 214, 0.14)';
             ctx.fillRect(level.viewX * cellW, 0, cellW, height);
@@ -217,7 +211,7 @@ class SidebarMapUI {
         }
 
         const goalX = (level.portalPos.x + 0.5) * cellW;
-        const goalZ = (level.portalPos.z + 0.5) * cellH;
+        const goalZ = (level.depth - (level.portalPos.z + 0.5)) * cellH;
         const markerSize = Math.max(3, Math.min(8, Math.min(cellW, cellH) * 0.34));
         const pulse = 0.75 + Math.sin(performance.now() / 220) * 0.22;
 
@@ -236,9 +230,9 @@ class SidebarMapUI {
         ctx.restore();
 
         const playerX = (player.visualX + 0.5) * cellW;
-        const playerZ = (player.visualZ + 0.5) * cellH;
+        const playerZ = (level.depth - (player.visualZ + 0.5)) * cellH;
         const facingX = player.moveEndX - player.moveStartX;
-        const facingZ = player.moveEndZ - player.moveStartZ;
+        const facingZ = -(player.moveEndZ - player.moveStartZ); // flipped to match the flipped Z axis above
         const angle = facingX === 0 && facingZ === 0 ? 0 : Math.atan2(facingZ, facingX);
         const arrowSize = Math.max(3.5, Math.min(9, Math.min(cellW, cellH) * 0.42));
 
