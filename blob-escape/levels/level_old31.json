@@ -1,0 +1,26 @@
+{
+  "id": 131,
+  "archived": true,
+  "name": "Vertical Test",
+  "subtitle": "Tab to rotate, Q/E to shift, walk into the shaft to change floors",
+  "map": [
+    [
+      "#######",
+      "#.....#",
+      "#.P...#",
+      "#.....#",
+      "#.....#",
+      "#.....#",
+      "#######"
+    ],
+    [
+      "#######",
+      "#.....#",
+      "#.X...#",
+      "#.....#",
+      "#.....#",
+      "#.....#",
+      "#######"
+    ]
+  ]
+}

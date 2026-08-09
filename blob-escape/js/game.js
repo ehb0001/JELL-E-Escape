@@ -412,18 +412,23 @@ class Game {
         grid.className = 'level-grid';
 
         LEVELS_DATA.forEach((lvl, i) => {
+            // [MODIFIED] archived 레벨(과거 1~40번 데이터)은 게임 내 레벨 선택 목록에는 표시하지 않고
+            // 데이터로만 남겨둠 -- id/진행도 로직(인덱스 기반)은 그대로 두고 렌더링만 스킵
+            if (lvl.archived) return;
+
             const btn = document.createElement('button');
             const unlocked = i <= this.unlockedLevels;
+            const displayNum = lvl.label || String(lvl.id).padStart(2, '0');
             btn.className = `level-btn ${unlocked ? 'unlocked' : 'locked'}`;
             btn.disabled = !unlocked;
             // [MODIFIED] 레벨 번호와 이름만 있던 카드를 구역 코드·상태·진입 방향이 보이는 탐사 카드로 개선
             btn.innerHTML = unlocked
-                ? `<span class="level-num">${String(lvl.id).padStart(2, '0')}</span>` +
-                  `<span class="level-info"><span class="level-code">SECTOR ${String(lvl.id).padStart(2, '0')} // OPEN</span>` +
+                ? `<span class="level-num">${displayNum}</span>` +
+                  `<span class="level-info"><span class="level-code">SECTOR ${displayNum} // OPEN</span>` +
                   `<span class="level-name">${lvl.name}</span></span><span class="level-arrow">›</span>`
                 : `<span class="level-num">—</span><span class="level-info"><span class="level-code">ACCESS DENIED</span>` +
                   `<span class="level-name">Locked sector</span></span>`;
-            btn.setAttribute('aria-label', unlocked ? `Stage ${lvl.id}: ${lvl.name}` : `Stage ${lvl.id}: locked`);
+            btn.setAttribute('aria-label', unlocked ? `Stage ${displayNum}: ${lvl.name}` : `Stage ${displayNum}: locked`);
             if (unlocked) {
                 btn.addEventListener('click', () => {
                     this.audio.playButtonClick();
@@ -1302,7 +1307,7 @@ class Game {
         if (hudKey === this.lastHUDKey) return;
         this.lastHUDKey = hudKey;
 
-        this.el.stageNum.textContent = `Stage ${this.level.levelData.id}`;
+        this.el.stageNum.textContent = `Stage ${this.level.levelData.label || this.level.levelData.id}`;
         this.el.stageName.textContent = this.level.levelData.name;
         this.el.stateIcon.textContent = stateInfo.icon;
         this.el.stateIcon.style.color = stateInfo.color;
@@ -1449,7 +1454,7 @@ class Game {
 
         const kicker = document.createElement('div');
         kicker.className = 'clear-screen-kicker';
-        kicker.textContent = `MISSION COMPLETE // SECTOR ${String(this.level.levelData.id).padStart(2, '0')}`;
+        kicker.textContent = `MISSION COMPLETE // SECTOR ${this.level.levelData.label || String(this.level.levelData.id).padStart(2, '0')}`;
         card.appendChild(kicker);
 
         const title = document.createElement('h2');

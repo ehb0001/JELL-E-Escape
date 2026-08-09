@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 튜토리얼 레벨을 1~6랩으로 전진 배치, 기존 1~40랩은 데이터 보관용으로 전환
+
+- 카드 튜토리얼 레벨(구 41~46, 파일명 `level_t01.json`~`level_t06.json`)의 `id`를 1~6으로 변경하고, 표시 전용 `label: "T1"`~`"T6"` 필드를 추가 — 레벨 선택 화면·상단바·클리어 화면 모두 `label`이 있으면 그걸 우선 표시
+- 기존 1~40번 레벨은 파일명을 `level_old01.json`~`level_old40.json`으로 변경하고 `id`를 101~140으로 재배정, `archived: true` 플래그 추가 — `levels/`에 데이터로만 남고 `manifest.json`에서 제외돼 게임이 로드하지 않음(레벨 선택 화면의 `archived` 스킵 로직은 유지해 향후 다시 노출할 때 대비)
+- 50랩은 id/파일명 변경 없이 그대로 유지
+- 진행도(`unlockedLevels`)는 배열 인덱스 기반이라 이번 변경 영향 없음
+
 ## Rendering performance optimization
 
 - Cached the static laboratory background and non-animated map tiles in offscreen canvases; only characters, items, portals, doors, fire, rubber walls, particles, and echo markers remain live-rendered.

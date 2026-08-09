@@ -1,0 +1,27 @@
+{
+  "id": 3,
+  "label": "T3",
+  "name": "Tutorial: Magnet",
+  "subtitle": "Pick up the magnet and stop at the metal wall.",
+  "tutorial": {
+    "cards": [
+      {
+        "title": "Magnet + Metal",
+        "color": "#4FC3F7",
+        "body": "자석 상태일 때 철 벽을 스쳐 지나가면 멈출 수 있습니다.\n철 벽을 이용해 목적지로 이동하세요."
+      }
+    ]
+  },
+  "hint": "매미 자석은....?",
+  "viewToggleEnabled": false,
+  "map": [
+    [
+      "####M####",
+      "#.......#",
+      "#...X.m.#",
+      "#..P....R",
+      "#.......#",
+      "#########"
+    ]
+  ]
+}

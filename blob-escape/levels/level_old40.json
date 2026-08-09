@@ -1,0 +1,13 @@
+{
+  "id": 140,
+  "archived": true,
+  "name": "Temp Fire Test",
+  "subtitle": "Fire should block movement unless you have ice",
+  "map": [
+    [
+      "#########",
+      "#P.F.X###",
+      "#########"
+    ]
+  ]
+}

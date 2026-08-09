@@ -1,0 +1,13 @@
+{
+  "id": 138,
+  "archived": true,
+  "name": "Temp Fire/Ice Test",
+  "subtitle": "Pick up ice, then test fire extinguishing",
+  "map": [
+    [
+      "#########",
+      "#P.i#####",
+      "###..F.X#"
+    ]
+  ]
+}
