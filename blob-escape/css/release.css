@@ -109,6 +109,7 @@ body::before {
 }
 
 #title-bar-stage:focus-visible,
+#title-bar-levelselect:focus-visible,
 #title-bar-restart:focus-visible {
     outline: 2px solid var(--mint);
     outline-offset: 3px;
@@ -189,6 +190,8 @@ kbd,
     font: 700 17px/1 'Orbitron', sans-serif;
 }
 
+/* [MODIFIED] 레벨 선택과 재시작을 동일한 출시용 컨트롤 패밀리로 표시 */
+#title-bar-levelselect,
 #title-bar-restart {
     width: 38px;
     height: 38px;
@@ -201,6 +204,7 @@ kbd,
     transition: 160ms ease;
 }
 
+#title-bar-levelselect:hover,
 #title-bar-restart:hover {
     border-color: rgba(120, 255, 214, 0.34);
     color: var(--mint);
@@ -208,6 +212,7 @@ kbd,
     transform: translateY(-1px);
 }
 
+#title-bar-levelselect:active,
 #title-bar-restart:active {
     background: rgba(120, 255, 214, 0.1);
     transform: translateY(1px);
@@ -533,6 +538,42 @@ kbd,
     opacity: 0.32;
 }
 
+/* [MODIFIED] 레벨 카드의 재질을 재사용하되 완료 정보와 행동 우선순위가 분명한 결과 카드로 정리 */
+.clear-screen {
+    border-color: rgba(120, 255, 214, 0.2);
+    background: linear-gradient(150deg, rgba(19, 39, 58, 0.97), rgba(5, 13, 27, 0.98));
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.06), 0 34px 100px rgba(0, 0, 0, 0.58);
+}
+
+.clear-screen-icon {
+    border-color: rgba(120, 255, 214, 0.32);
+    background: rgba(120, 255, 214, 0.055);
+    color: var(--mint);
+    box-shadow: inset 0 0 24px rgba(120, 255, 214, 0.08), 0 0 28px rgba(120, 255, 214, 0.08);
+}
+
+.clear-screen-kicker {
+    color: #526984;
+}
+
+.clear-screen-title {
+    color: #dffff5;
+    text-shadow: 0 0 26px rgba(120, 255, 214, 0.22);
+}
+
+.clear-action-btn {
+    min-height: 50px;
+    padding: 12px 14px;
+    font: 700 10px/1 'Orbitron', sans-serif;
+    letter-spacing: 0.6px;
+}
+
+.clear-action-primary {
+    border-color: rgba(120, 255, 214, 0.42);
+    background: linear-gradient(145deg, rgba(38, 100, 91, 0.62), rgba(10, 42, 42, 0.8));
+    color: var(--mint);
+}
+
 ::-webkit-scrollbar {
     width: 7px;
 }
@@ -612,6 +653,7 @@ kbd,
         max-width: 105px;
     }
 
+    #title-bar-levelselect,
     #title-bar-restart {
         width: 34px;
         height: 34px;

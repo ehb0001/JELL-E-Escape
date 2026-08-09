@@ -1,21 +1,21 @@
 {
   "id": 45,
-  "name": "Tutorial: Fire Block",
-  "subtitle": "The fire blocks your path, so take the detour.",
-  "tutorial": ["fire_block"],
-  "tutorialHint": "The direct right path is blocked by fire. Move down, then right, then up to reach the portal.",
+  "name": "Tutorial: Fire & Ice",
+  "subtitle": "Use ice to clear the blocked path.",
+  "tutorial": ["fire_ice_combo"],
+  "tutorialHint": "Pick up ice, then move up through the fire to reach the portal.",
   "tutorialDialog": [
     {
       "speaker": "영삼",
-      "text": "불 블록은 그냥 지나갈 수 없다.\n직접 오른쪽으로 가면 화염에 막히니,\n아래로 돌아가는 길을 찾아보자."
+      "text": "불 블록은 그냥 지나갈 수 없고,\n얼음 아이템이 있어야 불을 끌 수 있어.\n먼저 얼음을 집고, 그 다음 위쪽으로 이동해보자."
     }
   ],
   "map": [
     [
       "#########",
-      "#P.F...X#",
-      "#.#.###.#",
-      "#.......#",
+      "#X......#",
+      "#F......#",
+      "#i.P....#",
       "#.......#",
       "#########"
     ]

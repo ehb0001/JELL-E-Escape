@@ -2,6 +2,15 @@
 
 원본 대비 변경 사항 정리.
 
+## 튜토리얼 순서·UI 컨트롤 보완
+
+- 튜토리얼 44/45번을 `Fire Block` → `Fire & Ice` 순으로 교체해 문제를 먼저 경험한 뒤 해결 아이템을 배우도록 정리
+- `level_50`을 `Electric Charge`로 예약해 단독 전기문 다음에 전기 아이템+전기문 콤보를 배치하고, 기존 `level_50` `Oh, My`는 내용 변경 없이 `level_51`로 이동 (`level_47~49` 결번 유지)
+- BFS 검증: `level_50`은 최단 2수, `assertRequiresItem(STATE.ELECTRIC) = true`, `assertSolvedWithinMoves(5) = true`
+- 상단 재시작 버튼 옆에 전용 스테이지 선택 버튼을 추가하고, 스테이지명과 새 버튼이 공통 `_openLevelSelect()` 경로를 사용하도록 통일
+- `Input.onRestart()`와 물리 키 코드 `KeyR` 처리를 추가해 한글 IME 상태에서도 R 키 재시작이 동작하도록 연결
+- 클리어 후 스와이프 자동 진행을 제거하고 `스테이지 선택`·`재도전`·`다음 레벨` DOM 버튼을 제공하며, 마지막 레벨에서는 다음 버튼을 숨김
+
 ## 맵 데이터 구조
 
 **원본:** `js/level_new.js`에 `LEVELS_DATA` 배열로 30개 레벨이 하드코딩. `map`은 문자열 배열(`["행1", "행2", ...]`) 하나로, 2D 단층 그리드.
