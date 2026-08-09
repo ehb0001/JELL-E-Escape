@@ -29,6 +29,9 @@ class Input {
         this.restartCallback = null;
         // [MODIFIED] Esc로 레벨 선택 등 오버레이를 닫기 위한 콜백
         this.cancelCallback = null;
+        // [MODIFIED] 홈 화면/튜토리얼 카드에서 아무 키나 눌러도 다음으로 넘어가기 위한 콜백.
+        // 반환값이 true면 그 키 입력을 여기서 소비하고(다른 키 분기로 넘기지 않음) preventDefault.
+        this.advanceCallback = null;
 
         this._bindEvents();
     }
@@ -39,6 +42,10 @@ class Input {
 
     onCancel(callback) {
         this.cancelCallback = callback;
+    }
+
+    onAdvance(callback) {
+        this.advanceCallback = callback;
     }
 
     onTap(callback) {
@@ -142,6 +149,14 @@ class Input {
     }
 
     _onKeyDown(e) {
+        // [MODIFIED] 튜토리얼 카드가 떠 있는 동안은 input.disable()로 enabled가 꺼져 있는데, 그 상태에서도
+        // "아무 키나 눌러 진행"만은 예외로 통과시켜야 함 -- enabled 가드보다 먼저 체크. advanceCallback이
+        // 게임 상태(TITLE/튜토리얼 여부)를 스스로 확인하므로 그 두 상태가 아니면 안전하게 false를 반환함.
+        if (this.advanceCallback && this.advanceCallback()) {
+            e.preventDefault();
+            return;
+        }
+
         if (!this.enabled) return;
 
         const keyMap = {

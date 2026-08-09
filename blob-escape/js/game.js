@@ -45,6 +45,9 @@ class Game {
         this.clearTimer = 0;
         this.tutorialMsg = '';
         this.tutorialAlpha = 0;
+        // [MODIFIED] tutorialMsg가 ''로 지워진 뒤에도 tutorialAlpha가 0으로 줄어들 때까지 마지막 텍스트를
+        // 계속 그려서 페이드아웃이 보이게 함(tutorialMsg 자체를 렌더 조건으로 쓰면 즉시 사라져 보였음)
+        this.lastTutorialMsg = '';
         this.screenShake = 0;
         this.time = 0;
 
@@ -69,6 +72,8 @@ class Game {
         window.addEventListener('resize', () => this._resize());
         this.input.onSwipe((dir) => this._onSwipe(dir));
         this.input.onTap((x, y) => this._handleTap(x, y));
+        // [MODIFIED] 홈 화면/튜토리얼 카드에서 임의의 키 입력으로도 다음으로 넘어가도록 연결
+        this.input.onAdvance(() => this._handleAdvanceKey());
         this.input.onViewToggle((hoverPoint) => this._toggleView(hoverPoint));
         this.input.onViewShift((delta) => this._shiftView(delta));
         // [MODIFIED] Tab 롱프레스 중 보드 위 마우스가 가리키는 칸을 하이라이트하기 위한 프리뷰 상태
@@ -168,6 +173,7 @@ class Game {
         // Tutorial alpha
         if (this.tutorialMsg) {
             this.tutorialAlpha = Math.min(1, this.tutorialAlpha + dt * 2);
+            this.lastTutorialMsg = this.tutorialMsg;
         } else {
             this.tutorialAlpha = Math.max(0, this.tutorialAlpha - dt * 3);
         }
@@ -194,9 +200,30 @@ class Game {
 
     // ── Input ──
 
-    _onSwipe(direction) {
+    // [MODIFIED] 홈 화면/튜토리얼 카드에서 아무 키나 눌러도 진행되도록 Input.onAdvance에 연결.
+    // 두 상태가 아니면 아무것도 하지 않고 false를 반환해 다른 키 입력(이동/재시작 등)을 그대로 통과시킴.
+    _handleAdvanceKey() {
         if (this._tutorialPending) {
-            this._closeTutorial();
+            // [MODIFIED] 버그 수정: 여기서 곧장 Game._closeTutorial()을 부르면 카드가 여러 장 남아있어도
+            // 무시하고 즉시 튜토리얼을 닫으려 하는데, _closeTutorial은 게임 상태만 정리할 뿐
+            // TutorialUI.hide()를 호출하지 않아 카드 DOM(#ui-overlay)이 화면에 그대로 남았음. 클릭과
+            // 동일하게 TutorialUI._handleAdvance()를 호출해 "다음 카드로 넘기거나, 마지막이면 제대로 닫기"
+            // 경로(onClose -> Game._closeTutorial -> TutorialUI.hide까지 포함)를 그대로 타게 함.
+            this.tutorialUI._handleAdvance();
+            return true;
+        }
+        if (this.state === GAME_STATE.TITLE) {
+            this._startLevelSelect();
+            return true;
+        }
+        return false;
+    }
+
+    _onSwipe(direction) {
+        // [MODIFIED] 버그 수정: 탭/키보드와 동일하게 카드 넘김 경로(TutorialUI._handleAdvance)를 공유해야
+        // 카드가 여러 장 남았을 때 다음 카드로 넘어가고, 마지막 카드에서만 TutorialUI.hide까지 포함해 닫힘.
+        if (this._tutorialPending) {
+            this.tutorialUI._handleAdvance();
             return;
         }
 
@@ -333,16 +360,18 @@ class Game {
         if (this.levelSelectReturnState === GAME_STATE.TITLE) {
             overlay.style.display = 'none';
             overlay.innerHTML = '';
+            overlay.onclick = null;
             this.state = GAME_STATE.TITLE;
             document.body.classList.add('at-title');
             this._resize();
         } else if (this.levelSelectReturnState === GAME_STATE.LEVEL_CLEAR) {
-            // 클리어 카드가 원래 이 오버레이를 쓰고 있었으므로 다시 그려서 복원
+            // 클리어 카드가 원래 이 오버레이를 쓰고 있었으므로 다시 그려서 복원(_showClearScreen이 onclick도 정리함)
             this.state = GAME_STATE.LEVEL_CLEAR;
             this._showClearScreen();
         } else {
             overlay.style.display = 'none';
             overlay.innerHTML = '';
+            overlay.onclick = null;
             this.state = this.levelSelectReturnState || GAME_STATE.PLAYING;
         }
     }
@@ -356,8 +385,9 @@ class Game {
         container.className = 'level-select-container';
 
         // [MODIFIED] 배경(오버레이) 클릭 시 닫기 -- 카드 자체를 클릭한 경우는 버블링으로 여기까지
-        // 오지 않도록 container에서 stopPropagation
-        overlay.addEventListener('click', () => this._closeLevelSelect());
+        // 오지 않도록 container에서 stopPropagation. addEventListener 대신 onclick을 써서 이 함수가
+        // 여러 번 호출돼도(레벨 선택을 열고 닫기를 반복) 리스너가 누적되지 않고 항상 최신 것으로 대체됨.
+        overlay.onclick = () => this._closeLevelSelect();
         container.addEventListener('click', (e) => e.stopPropagation());
 
         const header = document.createElement('div');
@@ -423,6 +453,7 @@ class Game {
 
         this.tutorialAlpha = 0;
         this.tutorialMsg = '';
+        this.lastTutorialMsg = '';
 
         // [MODIFIED] 대사창(tutorialDialog)은 제거하고 카드 튜토리얼(tutorial.cards)만 사용.
         // hint는 튜토리얼 전용이 아니라 어떤 레벨에서든 쓸 수 있는 일반 힌트라 별도로 유지.
@@ -1086,7 +1117,8 @@ class Game {
         ctx.stroke();
         ctx.fillStyle = '#D9FFF4';
         ctx.font = '700 10px "Orbitron", sans-serif';
-        ctx.fillText('TAP  /  SWIPE TO INITIALIZE', centerX, h * 0.785);
+        // [MODIFIED] Input.onAdvance 추가로 아무 키나 눌러도 진행되므로 안내 문구에 반영
+        ctx.fillText('PRESS ANY KEY TO INITIALIZE', centerX, h * 0.785);
 
         ctx.globalAlpha = 1;
     }
@@ -1235,14 +1267,16 @@ class Game {
     }
 
     _renderTutorial(ctx, w, h) {
-        // [MODIFIED] item 브랜치의 튜토리얼 카드(Tutorial UI)가 떠 있는 동안(_tutorialPending)에는
-        // 힌트 말풍선을 같이 그리지 않도록 조건 추가(원본은 tutorialAlpha만 봄)
-        if (!this._tutorialPending && this.tutorialAlpha > 0.01 && this.tutorialMsg) {
+        // [MODIFIED] tutorialMsg가 이미 ''로 지워진 뒤에도 tutorialAlpha가 0으로 줄어들 때까지는
+        // lastTutorialMsg를 계속 그려서 페이드아웃이 실제로 보이게 함(원래는 tutorialMsg를 렌더 조건으로
+        // 써서 텍스트가 지워지자마자 알파값과 무관하게 즉시 사라졌음). item 브랜치의 튜토리얼 카드가
+        // 떠 있는 동안(_tutorialPending)에는 힌트 말풍선을 같이 그리지 않도록 조건 유지.
+        if (!this._tutorialPending && this.tutorialAlpha > 0.01 && this.lastTutorialMsg) {
             ctx.globalAlpha = this.tutorialAlpha * 0.9;
             ctx.fillStyle = 'rgba(10,10,26,0.75)';
 
             ctx.font = '13px "Orbitron", sans-serif';
-            const textW = ctx.measureText(this.tutorialMsg).width + 48;
+            const textW = ctx.measureText(this.lastTutorialMsg).width + 48;
             const tx = (w - textW) / 2;
             const ty = this.height - 90;
 
@@ -1252,7 +1286,7 @@ class Game {
             ctx.fillStyle = '#eee';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(this.tutorialMsg, w / 2, ty + 22);
+            ctx.fillText(this.lastTutorialMsg, w / 2, ty + 22);
             ctx.globalAlpha = 1;
         }
     }
@@ -1279,15 +1313,8 @@ class Game {
     }
 
     _handleTap(clientX, clientY) {
-        if (this.state === GAME_STATE.TITLE) {
-            this._startLevelSelect();
-            return;
-        }
-
-        if (this._tutorialPending) {
-            this._closeTutorial();
-            return;
-        }
+        // [MODIFIED] 탭/클릭도 임의의 키 입력과 같은 진행 로직을 공유
+        this._handleAdvanceKey();
     }
 
     _showTutorial(cards) {
@@ -1295,6 +1322,7 @@ class Game {
         this.input.disable();
         this.tutorialAlpha = 0;
         this.tutorialMsg = '';
+        this.lastTutorialMsg = '';
         this.tutorialUI.show(cards, () => this._closeTutorial());
     }
 
@@ -1401,6 +1429,9 @@ class Game {
         // [MODIFIED] 다음 행동을 명시적으로 고를 수 있도록 캔버스 완료 카드를 접근 가능한 DOM 카드로 교체
         const overlay = document.getElementById('ui-overlay');
         overlay.innerHTML = '';
+        // [MODIFIED] innerHTML 초기화는 자식 노드만 지우고 overlay.onclick 프로퍼티는 남기므로, 레벨 선택
+        // 화면에서 설정한 배경-클릭-닫기 리스너가 이 클리어 화면에 잘못 적용되지 않도록 명시적으로 해제
+        overlay.onclick = null;
         overlay.style.display = 'flex';
         overlay.style.pointerEvents = 'auto';
 
@@ -1440,7 +1471,14 @@ class Game {
             button.type = 'button';
             button.className = `level-btn unlocked clear-action-btn ${className}`;
             button.textContent = label;
-            button.addEventListener('click', handler);
+            // [MODIFIED] 버그 수정: "스테이지 선택" 클릭이 _openLevelSelect -> _setupLevelSelectUI를 동기
+            // 호출해 #ui-overlay에 배경-클릭-닫기 리스너를 새로 등록하는데, 바로 이 클릭 이벤트가 아직
+            // overlay까지 버블링 중이라 그 리스너가 즉시 실행되어 열리자마자 닫혀버렸음. 여기서 버블링을
+            // 끊어서 새로 열린 레벨 선택 화면이 같은 클릭에 의해 닫히지 않게 함.
+            button.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handler();
+            });
             return button;
         };
 

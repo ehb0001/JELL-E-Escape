@@ -15,6 +15,9 @@ class Tutorial {
         this.onClose = onClose;
 
         this.overlay.innerHTML = '';
+        // [MODIFIED] 레벨 선택 화면이 남겼을 수 있는 배경-클릭-닫기 리스너(overlay.onclick)가 섞여
+        // 실행되지 않도록 명시적으로 해제
+        this.overlay.onclick = null;
         this.overlay.style.display = 'flex';
         this.overlay.style.pointerEvents = 'auto';
         // [MODIFIED] 튜토리얼 카드가 떠 있는 동안만 뒷배경 블러/불투명도를 낮춰서 카드 뒤 게임 화면이
@@ -79,9 +82,10 @@ class Tutorial {
         const isLast = this.index >= this.cards.length - 1;
         const hint = document.createElement('div');
         hint.className = 'tutorial-hint';
+        // [MODIFIED] Input.onAdvance 추가로 아무 키나 눌러도 넘어가므로 안내 문구에도 반영
         hint.textContent = isLast
-            ? 'Tap or swipe anywhere to continue'
-            : `Tap or swipe to continue (${this.index + 1}/${this.cards.length})`;
+            ? 'Press any key'
+            : `Press any key (${this.index + 1}/${this.cards.length})`;
         this.container.appendChild(hint);
 
         this.overlay.innerHTML = '';
