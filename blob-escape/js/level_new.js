@@ -59,6 +59,15 @@ class Level {
 
         // [MODIFIED] 플레이어/골 에코 마커(정지 시점 좌표) -- setEchoMarkers 참고
         this.echoMarkers = [];
+
+        // [MODIFIED] Cache static background and map pixels; animated tiles stay live.
+        this.backgroundCache = document.createElement('canvas');
+        this.backgroundCacheKey = '';
+        this.boardCache = document.createElement('canvas');
+        this.boardCacheKey = '';
+        this.dynamicTiles = [];
+        this.canvasWidth = 0;
+        this.canvasHeight = 0;
     }
 
     load(levelIndex) {
@@ -70,6 +79,7 @@ class Level {
         this.extinguishedFire = new Set();
         this.openedDoors = new Set();
         this.rubberHitMap.clear();
+        this._invalidateRenderCache();
 
         const layers = data.map;
         this.depth = layers.length;
@@ -198,6 +208,8 @@ class Level {
         this.tileSize = Math.floor(Math.min(availW / cols, availH / rows, maxTileSize));
         this.offsetX = Math.floor((canvasWidth - this.tileSize * cols) / 2);
         this.offsetY = Math.floor((canvasHeight - this.tileSize * rows) / 2);
+        this.canvasWidth = canvasWidth;
+        this.canvasHeight = canvasHeight;
     }
 
     getTile(x, y, z = this.viewZ) {
@@ -232,14 +244,17 @@ class Level {
 
     consumeItem(x, y, z = this.viewZ) {
         this.consumedItems.add(`${x},${y},${z}`);
+        this._invalidateBoardCache();
     }
 
     openDoor(x, y, z = this.viewZ) {
         this.openedDoors.add(`${x},${y},${z}`);
+        this._invalidateBoardCache();
     }
 
     extinguishFire(x, y, z = this.viewZ) {
         this.extinguishedFire.add(`${x},${y},${z}`);
+        this._invalidateBoardCache();
     }
 
     triggerRubberBounce(x, y, z = this.viewZ) {
@@ -284,6 +299,20 @@ class Level {
     // 보드(패널+타일)만 확대/축소·플립하도록 배경과 보드 렌더를 분리.
     // 맵이 공중에 떠 있는 실험실 홀로그램 보드처럼 보이도록 배경·프레임·깊이감을 추가한 부분은 이 안에 유지.
     renderBackground(ctx, canvasWidth, canvasHeight) {
+        const dpr = Math.max(1, ctx.canvas.width / Math.max(1, canvasWidth));
+        const cacheKey = [canvasWidth, canvasHeight, dpr.toFixed(3), this.tileSize, this.offsetX, this.offsetY].join('|');
+        if (cacheKey !== this.backgroundCacheKey) {
+            this._resizeCacheCanvas(this.backgroundCache, canvasWidth, canvasHeight, dpr);
+            const cacheCtx = this.backgroundCache.getContext('2d');
+            cacheCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            cacheCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+            this._paintBackground(cacheCtx, canvasWidth, canvasHeight);
+            this.backgroundCacheKey = cacheKey;
+        }
+        ctx.drawImage(this.backgroundCache, 0, 0, canvasWidth, canvasHeight);
+    }
+
+    _paintBackground(ctx, canvasWidth, canvasHeight) {
         const background = ctx.createRadialGradient(
             canvasWidth * 0.48, canvasHeight * 0.42, 0,
             canvasWidth * 0.48, canvasHeight * 0.42, Math.max(canvasWidth, canvasHeight) * 0.72
@@ -310,6 +339,39 @@ class Level {
     // Board panel (glow frame) + the actual tile grid -- this is the part that
     // Q/E and Tab transitions scale/flip, so it must not draw the full-canvas background.
     renderBoard(ctx) {
+        const dpr = Math.max(1, ctx.canvas.width / Math.max(1, this.canvasWidth));
+        const mirror = this.mirror[this.viewAxis];
+        const cacheKey = [
+            this.levelData?.id,
+            this.viewAxis, this.viewX, this.viewZ,
+            mirror.h, mirror.v,
+            this.canvasWidth, this.canvasHeight, dpr.toFixed(3),
+            this.tileSize, this.offsetX, this.offsetY,
+            this.consumedItems.size, this.openedDoors.size, this.extinguishedFire.size,
+        ].join('|');
+
+        if (cacheKey !== this.boardCacheKey) {
+            this._rebuildBoardCache(dpr);
+            this.boardCacheKey = cacheKey;
+        }
+
+        ctx.drawImage(this.boardCache, 0, 0, this.canvasWidth, this.canvasHeight);
+
+        // [MODIFIED] Redraw only tiles whose appearance changes with time or interaction.
+        for (const entry of this.dynamicTiles) {
+            const tile = this.getTile(entry.x, entry.y, entry.z);
+            this._renderTile(ctx, tile, entry.px, entry.py, this.tileSize, entry.x, entry.y, entry.z);
+        }
+
+        this._renderEchoMarkers(ctx);
+    }
+
+    _rebuildBoardCache(dpr) {
+        this._resizeCacheCanvas(this.boardCache, this.canvasWidth, this.canvasHeight, dpr);
+        const ctx = this.boardCache.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+
         const { cols, rows } = this.getViewDimensions();
         const boardW = cols * this.tileSize;
         const boardH = rows * this.tileSize;
@@ -324,17 +386,43 @@ class Level {
         ctx.strokeRect(this.offsetX - 9.5, this.offsetY - 9.5, boardW + 19, boardH + 19);
         ctx.restore();
 
+        this.dynamicTiles = [];
         for (let row = 0; row < rows; row++) {
             for (let col = 0; col < cols; col++) {
                 const g = this.viewToGrid(col, row);
                 const tile = this.getTile(g.x, g.y, g.z);
                 const px = this.offsetX + col * this.tileSize;
                 const py = this.offsetY + row * this.tileSize;
-                this._renderTile(ctx, tile, px, py, this.tileSize, g.x, g.y, g.z);
+                if (this._isDynamicTile(tile)) {
+                    this.dynamicTiles.push({ ...g, px, py });
+                } else {
+                    this._renderTile(ctx, tile, px, py, this.tileSize, g.x, g.y, g.z);
+                }
             }
         }
+    }
 
-        this._renderEchoMarkers(ctx);
+    _isDynamicTile(tile) {
+        return isItem(tile) || tile === TILE.PORTAL || tile === TILE.ELECTRIC_DOOR ||
+            tile === TILE.RUBBER_WALL || tile === TILE.FIRE;
+    }
+
+    _resizeCacheCanvas(canvas, width, height, dpr) {
+        const pixelWidth = Math.max(1, Math.round(width * dpr));
+        const pixelHeight = Math.max(1, Math.round(height * dpr));
+        if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+            canvas.width = pixelWidth;
+            canvas.height = pixelHeight;
+        }
+    }
+
+    _invalidateBoardCache() {
+        this.boardCacheKey = '';
+    }
+
+    _invalidateRenderCache() {
+        this.backgroundCacheKey = '';
+        this._invalidateBoardCache();
     }
 
     // [MODIFIED] 플레이어/골과 X-Y 좌표는 같지만 다른 층(슬라이스)에 있는 칸 위에 은은한 원 마커를 그려서

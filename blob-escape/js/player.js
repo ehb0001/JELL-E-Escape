@@ -37,6 +37,8 @@ class Player {
         this.colorTransition = 0;
         this.prevColor = '#69F0AE';
         this.currentColor = '#69F0AE';
+        this.magnetTargetCacheKey = '';
+        this.magnetTargetCache = null;
     }
 
     reset(startX, startY, startZ = 0) {
@@ -63,6 +65,8 @@ class Player {
         this.colorTransition = 1;
         this.prevColor = STATE_INFO[STATE.NORMAL].color;
         this.currentColor = STATE_INFO[STATE.NORMAL].color;
+        this.magnetTargetCacheKey = '';
+        this.magnetTargetCache = null;
     }
 
     // ── Movement ──
@@ -324,29 +328,10 @@ class Player {
 
                 // Draw magnetic pull lines to nearest M wall on the player's own layer
                 const pz = this.gridZ;
-                let mx = null, my = null, dist = Infinity;
-                for (let yy = 0; yy < level.height; yy++) {
-                    for (let xx = 0; xx < level.width; xx++) {
-                        if (level.getTile(xx, yy, pz) === TILE.METAL_WALL) {
-                            if (xx === this.gridX || yy === this.gridY) {
-                                let clear = true;
-                                if (xx === this.gridX) {
-                                    const minY = Math.min(yy, this.gridY);
-                                    const maxY = Math.max(yy, this.gridY);
-                                    for(let j=minY+1; j<maxY; j++) if(isBlocking(level.getTile(xx, j, pz), this.state)) clear = false;
-                                } else {
-                                    const minX = Math.min(xx, this.gridX);
-                                    const maxX = Math.max(xx, this.gridX);
-                                    for(let j=minX+1; j<maxX; j++) if(isBlocking(level.getTile(j, this.gridY, pz), this.state)) clear = false;
-                                }
-                                if (clear) {
-                                    const d = Math.abs(xx - this.gridX) + Math.abs(yy - this.gridY);
-                                    if (d < dist) { dist = d; mx = xx; my = yy; }
-                                }
-                            }
-                        }
-                    }
-                }
+                const target = this._getMagnetTarget(level);
+                const mx = target?.x ?? null;
+                const my = target?.y ?? null;
+                const dist = target?.dist ?? Infinity;
 
                 if (mx !== null && dist > 0) {
                     const mPos = level.gridToPixelIfVisible(mx, my, pz);
@@ -411,6 +396,50 @@ class Player {
                 }
                 break;
         }
+    }
+
+    _getMagnetTarget(level) {
+        const cacheKey = [
+            level.levelData?.id,
+            this.gridX, this.gridY, this.gridZ,
+            level.openedDoors.size, level.extinguishedFire.size,
+        ].join('|');
+        if (cacheKey === this.magnetTargetCacheKey) return this.magnetTargetCache;
+
+        // [MODIFIED] Metal walls are static, so scan only after the player or blocking layout changes.
+        let target = null;
+        let shortestDistance = Infinity;
+        for (let yy = 0; yy < level.height; yy++) {
+            for (let xx = 0; xx < level.width; xx++) {
+                if (level.getTile(xx, yy, this.gridZ) !== TILE.METAL_WALL) continue;
+                if (xx !== this.gridX && yy !== this.gridY) continue;
+
+                let clear = true;
+                if (xx === this.gridX) {
+                    const minY = Math.min(yy, this.gridY);
+                    const maxY = Math.max(yy, this.gridY);
+                    for (let j = minY + 1; j < maxY; j++) {
+                        if (isBlocking(level.getTile(xx, j, this.gridZ), this.state)) clear = false;
+                    }
+                } else {
+                    const minX = Math.min(xx, this.gridX);
+                    const maxX = Math.max(xx, this.gridX);
+                    for (let j = minX + 1; j < maxX; j++) {
+                        if (isBlocking(level.getTile(j, this.gridY, this.gridZ), this.state)) clear = false;
+                    }
+                }
+
+                const distance = Math.abs(xx - this.gridX) + Math.abs(yy - this.gridY);
+                if (clear && distance < shortestDistance) {
+                    shortestDistance = distance;
+                    target = { x: xx, y: yy, dist: distance };
+                }
+            }
+        }
+
+        this.magnetTargetCacheKey = cacheKey;
+        this.magnetTargetCache = target;
+        return target;
     }
 
     _lerpColor(colorA, colorB, t) {

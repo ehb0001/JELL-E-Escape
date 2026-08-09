@@ -34,6 +34,8 @@
             </div>
             <div class="title-bar-controls" aria-hidden="true"><kbd>TAB</kbd> VIEW <kbd>Q</kbd><kbd>E</kbd> SLICE</div>
             <div class="moves-cluster"><span class="hud-label">MOVES</span><div id="title-bar-moves">0</div></div>
+            <!-- [MODIFIED] 스테이지명 클릭을 발견하지 못해도 명확히 레벨 선택으로 돌아갈 수 있는 전용 버튼 추가 -->
+            <button id="title-bar-levelselect" aria-label="Open level select" title="스테이지 선택"><span aria-hidden="true">▦</span></button>
             <button id="title-bar-restart" aria-label="Restart level"><span aria-hidden="true">↺</span></button>
         </header>
 
@@ -142,14 +144,14 @@
 
     <!-- Scripts (load in dependency order) -->
     <script src="js/constants.js?v=5"></script>
-    <script src="js/effects.js?v=4"></script>
-    <script src="js/input.js?v=4"></script>
-    <script src="js/level_new.js?v=26"></script>
+    <script src="js/effects.js?v=5"></script>
+    <script src="js/input.js?v=5"></script>
+    <script src="js/level_new.js?v=27"></script>
     <script src="js/tutorial.js?v=5"></script>
-    <script src="js/player.js?v=8"></script>
+    <script src="js/player.js?v=9"></script>
     <!-- [MODIFIED] Game 생성 전에 SidebarMapUI 의존성을 사용할 수 있도록 game.js 바로 앞에서 로드 -->
     <script src="js/sidebar.js?v=6"></script>
-    <script src="js/game.js?v=41"></script>
+    <script src="js/game.js?v=42"></script>
 
 </body>
 </html>

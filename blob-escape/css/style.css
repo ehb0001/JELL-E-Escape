@@ -92,6 +92,8 @@ body.at-title #game-container {
     color: #8888aa;
 }
 
+/* [MODIFIED] 레벨 선택과 재시작을 같은 크기·상호작용의 명시적 상단 컨트롤로 통일 */
+#title-bar-levelselect,
 #title-bar-restart {
     display: flex;
     align-items: center;
@@ -107,6 +109,7 @@ body.at-title #game-container {
     cursor: pointer;
 }
 
+#title-bar-levelselect:active,
 #title-bar-restart:active {
     background: rgba(255, 255, 255, 0.2);
 }
@@ -552,6 +555,71 @@ body.at-title #game-container {
     color: #aaa;
     text-align: center;
     letter-spacing: 1px;
+}
+
+/* [MODIFIED] 클리어 후 스와이프 대신 세 가지 다음 행동을 명시적으로 선택하는 DOM 완료 카드 */
+.clear-screen {
+    width: min(92%, 560px);
+    padding: 30px;
+    border: 1px solid rgba(105, 240, 174, 0.22);
+    border-radius: 20px;
+    background: rgba(20, 28, 50, 0.94);
+    color: #eee;
+    text-align: center;
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.45);
+}
+
+.clear-screen-icon {
+    display: flex;
+    width: 58px;
+    height: 58px;
+    margin: 0 auto 18px;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(105, 240, 174, 0.38);
+    border-radius: 50%;
+    color: #69F0AE;
+    font: 700 22px/1 'Orbitron', sans-serif;
+}
+
+.clear-screen-kicker {
+    color: #7689a3;
+    font: 700 9px/1.4 'Orbitron', sans-serif;
+    letter-spacing: 1.6px;
+}
+
+.clear-screen-title {
+    margin: 12px 0 10px;
+    color: #eafff8;
+    font: 800 clamp(22px, 5vw, 32px)/1.1 'Orbitron', sans-serif;
+    letter-spacing: 2px;
+}
+
+.clear-screen-log {
+    margin: 0;
+    color: #8fa1b8;
+    font: 600 10px/1.5 'Orbitron', sans-serif;
+}
+
+.clear-screen-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-top: 26px;
+}
+
+.clear-action-btn {
+    min-height: 48px;
+    justify-content: center;
+    color: #dce8f7;
+    font-size: 12px;
+    text-align: center;
+}
+
+.clear-action-primary {
+    border-color: rgba(105, 240, 174, 0.5);
+    background: rgba(105, 240, 174, 0.12);
+    color: #b9ffe5;
 }
 
 /* ── Safe area ── */

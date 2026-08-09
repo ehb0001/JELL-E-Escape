@@ -25,6 +25,8 @@ class Input {
         this.tabHoldTimer = null;
         this.lastMouseX = 0;
         this.lastMouseY = 0;
+        // [MODIFIED] 버튼과 동일한 재시작 요청을 물리 키 위치 기준으로 전달하기 위한 전용 콜백
+        this.restartCallback = null;
 
         this._bindEvents();
     }
@@ -151,6 +153,15 @@ class Input {
             return;
         }
 
+        // [MODIFIED] 한글 IME에서도 같은 물리 키가 동작하도록 e.key 대신 KeyboardEvent.code를 사용
+        if (e.code === 'KeyR') {
+            if (this.restartCallback) {
+                e.preventDefault();
+                this.restartCallback();
+            }
+            return;
+        }
+
         if (e.key === 'Tab') {
             e.preventDefault();
             // [MODIFIED] OS 키 반복 이벤트는 무시하고 실제 첫 keydown에서만 홀드 타이머 시작.
@@ -215,5 +226,10 @@ class Input {
         if (wasHoldPreview && this.viewTogglePreviewCallback) {
             this.viewTogglePreviewCallback(false, 0, 0);
         }
+    }
+
+    onRestart(callback) {
+        // New callback registration is kept at the end of the class per repository placement rules.
+        this.restartCallback = callback;
     }
 }

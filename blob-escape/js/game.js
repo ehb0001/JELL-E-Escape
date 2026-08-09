@@ -18,19 +18,13 @@ class Game {
             stateName: document.getElementById('title-bar-state-name'),
             moves: document.getElementById('title-bar-moves'),
             restartBtn: document.getElementById('title-bar-restart'),
+            levelSelectBtn: document.getElementById('title-bar-levelselect'),
         };
-        this.el.restartBtn.addEventListener('click', () => {
-            if (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.ANIMATING) {
-                this._restartLevel();
-            }
-        });
-        document.getElementById('title-bar-stage').addEventListener('click', () => {
-            if (this.state === GAME_STATE.PLAYING) {
-                this.state = GAME_STATE.LEVEL_SELECT;
-                this._setupLevelSelectUI();
-                document.getElementById('ui-overlay').style.display = 'flex';
-            }
-        });
+        // [MODIFIED] 버튼과 R 키가 같은 재시작 조건을 공유하도록 요청 핸들러로 통일
+        this.el.restartBtn.addEventListener('click', () => this._handleRestartRequest());
+        // [MODIFIED] 스테이지명과 새 전용 버튼이 같은 레벨 선택 진입 로직을 공유하도록 통일
+        document.getElementById('title-bar-stage').addEventListener('click', () => this._openLevelSelect());
+        this.el.levelSelectBtn.addEventListener('click', () => this._openLevelSelect());
 
         // Systems
         this.level = new Level();
@@ -40,6 +34,7 @@ class Game {
         this.input = new Input(this.canvas);
         // [MODIFIED] 게임의 뷰·플레이어 상태를 우측 방향도와 미니맵에 동기화하기 위한 전용 UI 시스템
         this.sidebarUI = new SidebarMapUI();
+        this.lastHUDKey = '';
 
         // [MODIFIED] X-Y/Z-Y 뷰 대칭, 효과음 온/오프 설정 -- 저장된 값을 불러와 level.mirror/audio에 적용하고
         // 사이드바 설정 카드의 체크박스와 양방향으로 동기화
@@ -81,6 +76,8 @@ class Game {
         this.input.onViewTogglePreview((active, x, y) => {
             this.tabHoverHighlight = (active && this._viewToggleAllowed()) ? { x, y } : null;
         });
+        // [MODIFIED] 한글/영문 입력 상태와 무관한 물리 R 키 재시작 요청을 게임 상태 핸들러에 연결
+        this.input.onRestart(() => this._handleRestartRequest());
 
         this.tutorialUI = new Tutorial();
         this._tutorialPending = false;
@@ -93,7 +90,8 @@ class Game {
     // ── Resize ──
 
     _resize() {
-        const dpr = window.devicePixelRatio || 1;
+        // [MODIFIED] Cap backing-store density so 3x/4x displays do not multiply blur cost excessively.
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
         this.dpr = dpr; // [MODIFIED] Q/E 스냅샷 캔버스에도 동일한 dpr 변환을 적용하기 위해 보관
         const rect = this.container.getBoundingClientRect();
         this.width = rect.width;
@@ -213,11 +211,6 @@ class Game {
                 this._movePlayer(direction);
                 break;
 
-            case GAME_STATE.LEVEL_CLEAR:
-                if (this.clearTimer > 1) {
-                    this._nextLevel();
-                }
-                break;
         }
     }
 
@@ -410,9 +403,7 @@ class Game {
             this._loadLevel(this.currentLevel + 1);
         } else {
             // All levels complete!
-            this.state = GAME_STATE.LEVEL_SELECT;
-            this._setupLevelSelectUI();
-            document.getElementById('ui-overlay').style.display = 'flex';
+            this._openLevelSelect();
         }
     }
 
@@ -779,6 +770,8 @@ class Game {
         const pos = this._gridToPixel(this.player.gridX, this.player.gridY, this.player.gridZ);
         if (pos) this.particles.burstCelebration(pos.x, pos.y);
         this.audio.playClear();
+        // [MODIFIED] 스와이프 자동 진행 대신 선택 가능한 DOM 완료 화면을 즉시 표시
+        this._showClearScreen();
     }
 
     _restartLevel() {
@@ -1161,18 +1154,6 @@ class Game {
             }
         }
 
-        // Electric wall sparks (only meaningful on the X-Y view)
-        if (this.level.viewAxis === 'z' && Math.random() < 0.3) {
-            for (let y = 0; y < this.level.height; y++) {
-                for (let x = 0; x < this.level.width; x++) {
-                    if (this.level.getTile(x, y) === TILE.ELECTRIC && Math.random() < 0.03) {
-                        const ep = this._gridToPixel(x, y, this.level.viewZ);
-                        if (ep) this.particles.emitSparks(ep.x, ep.y);
-                    }
-                }
-            }
-        }
-
         // Particles
         this.particles.render(ctx);
 
@@ -1213,6 +1194,14 @@ class Game {
 
     _updateHUD() {
         const stateInfo = STATE_INFO[this.player.state];
+        const hudKey = [
+            this.level.levelData.id,
+            this.level.levelData.name,
+            this.player.state,
+            this.player.moveCount,
+        ].join('|');
+        if (hudKey === this.lastHUDKey) return;
+        this.lastHUDKey = hudKey;
 
         this.el.stageNum.textContent = `Stage ${this.level.levelData.id}`;
         this.el.stageName.textContent = this.level.levelData.name;
@@ -1255,62 +1244,11 @@ class Game {
     }
 
     _renderClearOverlay(ctx, w, h) {
-        // [MODIFIED] 클리어 화면을 단순 텍스트 오버레이에서 결과 카드와 상태 링이 있는 완료 화면으로 개선
+        // [MODIFIED] 완료 정보와 조작은 DOM 카드가 담당하므로 캔버스에는 게임 화면을 고정하는 딤만 유지
         const alpha = Math.min(1, this.clearTimer * 2);
         ctx.globalAlpha = alpha;
-
-        ctx.fillStyle = 'rgba(3, 7, 15, 0.76)';
+        ctx.fillStyle = 'rgba(3, 7, 15, 0.52)';
         ctx.fillRect(0, 0, w, h);
-
-        const centerY = h * 0.45;
-        const cardW = Math.min(430, w * 0.76);
-        const cardH = 230;
-        this._roundRect(ctx, w / 2 - cardW / 2, centerY - cardH / 2, cardW, cardH, 24);
-        const card = ctx.createLinearGradient(0, centerY - cardH / 2, 0, centerY + cardH / 2);
-        card.addColorStop(0, 'rgba(20, 39, 59, 0.96)');
-        card.addColorStop(1, 'rgba(7, 16, 30, 0.97)');
-        ctx.fillStyle = card;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(120, 255, 214, 0.24)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        ctx.strokeStyle = 'rgba(120, 255, 214, 0.2)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(w / 2, centerY - 55, 27 + Math.sin(this.time * 3) * 2, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.fillStyle = '#78FFD6';
-        ctx.font = '700 16px "Orbitron", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('✓', w / 2, centerY - 55);
-
-        ctx.save();
-        ctx.shadowColor = '#78FFD6';
-        ctx.shadowBlur = 22;
-        ctx.fillStyle = '#DFFFF5';
-        ctx.font = '800 27px "Orbitron", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('SECTOR CLEARED', w / 2, centerY - 5);
-        ctx.restore();
-
-        ctx.fillStyle = '#778AA3';
-        ctx.font = '600 10px "Orbitron", sans-serif';
-        ctx.fillText(`MOVEMENT LOG  //  ${String(this.player.moveCount).padStart(2, '0')} MOVES`, w / 2, centerY + 35);
-
-        // Next prompt
-        if (this.clearTimer > 1) {
-            const promptAlpha = 0.5 + Math.sin(this.time * 3) * 0.3;
-            ctx.globalAlpha = alpha * promptAlpha;
-            ctx.fillStyle = '#B8C9DB';
-            ctx.font = '700 9px "Orbitron", sans-serif';
-
-            const hasNext = this.currentLevel + 1 < LEVELS_DATA.length;
-            ctx.fillText(hasNext ? 'SWIPE TO ENTER NEXT SECTOR  →' : 'ALL SECTORS SECURE  //  SWIPE TO ARCHIVE', w / 2, centerY + 78);
-        }
-
         ctx.globalAlpha = 1;
     }
 
@@ -1372,6 +1310,90 @@ class Game {
             ctx.beginPath(); ctx.arc(px, py, i % 4 === 0 ? 1.6 : 0.8, 0, Math.PI * 2); ctx.fill();
         }
         ctx.restore();
+    }
+
+    _openLevelSelect() {
+        // New navigation helper is kept at the end of the class per repository placement rules.
+        // [MODIFIED] 플레이 중 상단 컨트롤과 클리어 카드가 동일한 레벨 선택 진입 경로를 공유
+        if (this.state !== GAME_STATE.PLAYING && this.state !== GAME_STATE.LEVEL_CLEAR) return;
+        this.state = GAME_STATE.LEVEL_SELECT;
+        this.audio.playButtonClick();
+        this._setupLevelSelectUI();
+    }
+
+    _handleRestartRequest() {
+        // New input helper is kept at the end of the class per repository placement rules.
+        // [MODIFIED] 재시작 버튼과 물리 R 키가 애니메이션 중을 포함한 기존 허용 조건을 공유
+        if (this.state === GAME_STATE.PLAYING || this.state === GAME_STATE.ANIMATING) {
+            this._restartLevel();
+        }
+    }
+
+    _showClearScreen() {
+        // New DOM UI helper is kept at the end of the class per repository placement rules.
+        // [MODIFIED] 다음 행동을 명시적으로 고를 수 있도록 캔버스 완료 카드를 접근 가능한 DOM 카드로 교체
+        const overlay = document.getElementById('ui-overlay');
+        overlay.innerHTML = '';
+        overlay.style.display = 'flex';
+        overlay.style.pointerEvents = 'auto';
+
+        const card = document.createElement('section');
+        card.className = 'clear-screen';
+        card.setAttribute('role', 'dialog');
+        card.setAttribute('aria-modal', 'true');
+        card.setAttribute('aria-labelledby', 'clear-screen-title');
+
+        const icon = document.createElement('div');
+        icon.className = 'clear-screen-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = '✓';
+        card.appendChild(icon);
+
+        const kicker = document.createElement('div');
+        kicker.className = 'clear-screen-kicker';
+        kicker.textContent = `MISSION COMPLETE // SECTOR ${String(this.level.levelData.id).padStart(2, '0')}`;
+        card.appendChild(kicker);
+
+        const title = document.createElement('h2');
+        title.id = 'clear-screen-title';
+        title.className = 'clear-screen-title';
+        title.textContent = 'SECTOR CLEARED';
+        card.appendChild(title);
+
+        const log = document.createElement('p');
+        log.className = 'clear-screen-log';
+        log.textContent = `MOVEMENT LOG  //  ${String(this.player.moveCount).padStart(2, '0')} MOVES`;
+        card.appendChild(log);
+
+        const actions = document.createElement('div');
+        actions.className = 'clear-screen-actions';
+
+        const createActionButton = (label, className, handler) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `level-btn unlocked clear-action-btn ${className}`;
+            button.textContent = label;
+            button.addEventListener('click', handler);
+            return button;
+        };
+
+        actions.appendChild(createActionButton('스테이지 선택', 'clear-action-secondary', () => {
+            this._openLevelSelect();
+        }));
+        actions.appendChild(createActionButton('재도전', 'clear-action-secondary', () => {
+            overlay.style.display = 'none';
+            this._restartLevel();
+        }));
+
+        if (this.currentLevel + 1 < LEVELS_DATA.length) {
+            actions.appendChild(createActionButton('다음 레벨', 'clear-action-primary', () => {
+                overlay.style.display = 'none';
+                this._nextLevel();
+            }));
+        }
+
+        card.appendChild(actions);
+        overlay.appendChild(card);
     }
 }
 
