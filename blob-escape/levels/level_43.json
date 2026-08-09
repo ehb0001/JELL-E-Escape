@@ -1,0 +1,23 @@
+{
+  "id": 43,
+  "name": "Tutorial: Magnet",
+  "subtitle": "Pick up the magnet and stop at the metal wall.",
+  "tutorial": ["magnet_metal"],
+  "tutorialHint": "Pick up the magnet, move up to stop at the metal wall, then move right to the exit.",
+  "tutorialDialog": [
+    {
+      "speaker": "영삼",
+      "text": "자석을 먹으면 철 벽 옆에서 멈출 수 있어.\n자석을 집은 뒤 위로 이동하면 철 벽 앞에서 멈추고,\n그다음 오른쪽으로 이동하면 탈출할 수 있어."
+    }
+  ],
+  "map": [
+    [
+      "#########",
+      "#..##X..#",
+      "#.M.....#",
+      "#m.P....#",
+      "#.......#",
+      "#########"
+    ]
+  ]
+}

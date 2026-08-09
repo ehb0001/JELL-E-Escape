@@ -1,0 +1,23 @@
+{
+  "id": 44,
+  "name": "Tutorial: Fire & Ice",
+  "subtitle": "Use ice to clear the blocked path.",
+  "tutorial": ["fire_ice_combo"],
+  "tutorialHint": "Pick up ice, then move up through the fire to reach the portal.",
+  "tutorialDialog": [
+    {
+      "speaker": "영삼",
+      "text": "불 블록은 그냥 지나갈 수 없고,\n얼음 아이템이 있어야 불을 끌 수 있어.\n먼저 얼음을 집고, 그 다음 위쪽으로 이동해보자."
+    }
+  ],
+  "map": [
+    [
+      "#########",
+      "#X......#",
+      "#F......#",
+      "#i.P....#",
+      "#.......#",
+      "#########"
+    ]
+  ]
+}
