@@ -15,6 +15,8 @@ class SidebarMapUI {
         this.lastRenderKey = '';
     }
 
+    // [MODIFIED] viewToggleEnabled: false인 레벨은 game.js가 이 카드들을 아예 호출하지 않고(콘텐츠
+    // DOM을 안내 문구로 교체) 대체하므로, 이 클래스는 그 판단을 신경 쓰지 않고 항상 정상 렌더링만 함.
     render(level, player, force = false) {
         if (!level || !level.levelData || !this.orientationCanvas || !this.minimapCanvas) return;
 

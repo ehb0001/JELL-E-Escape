@@ -2,22 +2,25 @@
   "id": 42,
   "name": "Tutorial: Rubber Bounce",
   "subtitle": "Bounce off the rubber wall and use the rebound.",
-  "tutorial": ["rubber_bounce"],
-  "tutorialHint": "Move right into the rubber wall, then move up to reach the portal.",
-  "tutorialDialog": [
-    {
-      "speaker": "영삼",
-      "text": "고무 벽에 부딪히면 한 칸 뒤로 튕겨진다.\n오른쪽으로 이동해 고무 벽에 닿고,\n그다음 위쪽으로 이동하면 포탈에 도달할 수 있어."
-    }
-  ],
+  "tutorial": {
+    "cards": [
+      {
+        "title": "Rubber bounce",
+        "color": "#6D4C41",
+        "body": "고무 벽에 부딪히면 뒤로 튕겨져 나옵니다.\n올바른 방향으로 튕겨져 나오도록 이동하세요."
+      }
+    ]
+  },
+  "hint": "방방도 좋아하나요...?",
+  "viewToggleEnabled": false,
   "map": [
     [
-      "#########",
-      "#.X.....#",
-      "#.#.....#",
-      "#P..R...#",
-      "#.......#",
-      "#########"
+      "##R####",
+      "R.....#",
+      "#R....#",
+      "#..X..#",
+      "#P....#",
+      "#######"
     ]
   ]
 }

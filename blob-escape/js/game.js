@@ -50,9 +50,6 @@ class Game {
         this.clearTimer = 0;
         this.tutorialMsg = '';
         this.tutorialAlpha = 0;
-        this.tutorialDialog = null;
-        this.tutorialDialogIndex = 0;
-        this.tutorialDialogVisible = false;
         this.screenShake = 0;
         this.time = 0;
 
@@ -82,7 +79,7 @@ class Game {
         // [MODIFIED] Tab 롱프레스 중 보드 위 마우스가 가리키는 칸을 하이라이트하기 위한 프리뷰 상태
         this.tabHoverHighlight = null; // { x, y } in canvas CSS px, or null
         this.input.onViewTogglePreview((active, x, y) => {
-            this.tabHoverHighlight = active ? { x, y } : null;
+            this.tabHoverHighlight = (active && this._viewToggleAllowed()) ? { x, y } : null;
         });
 
         this.tutorialUI = new Tutorial();
@@ -198,7 +195,6 @@ class Game {
     // ── Input ──
 
     _onSwipe(direction) {
-        if (this.tutorialDialogVisible) return;
         if (this._tutorialPending) {
             this._closeTutorial();
             return;
@@ -227,6 +223,34 @@ class Game {
 
     // ── View (axis) switching ──
 
+    // [MODIFIED] 레벨 루트의 `viewToggleEnabled`로 Tab/Q/E 시점 전환 자체를 막을 수 있음(튜토리얼 등
+    // 특정 시점만 강제하고 싶은 레벨용). 키가 없으면 기본값 true(전환 가능)로 동작.
+    _viewToggleAllowed() {
+        const data = this.level.levelData;
+        return !data || data.viewToggleEnabled !== false;
+    }
+
+    // [MODIFIED] 시점 전환이 막힌 레벨에서는 시점 방향도/탑뷰 미니맵 카드의 제목을 포함한 콘텐츠 전체를
+    // 렌더링하지 않고 안내 문구로 대체하며, 카드 자체도 회색조로 톤 다운함(레벨 로드 시 1회만 갱신).
+    _updateViewSidebarAvailability() {
+        const disabled = !this._viewToggleAllowed();
+        this.viewSidebarDisabled = disabled;
+
+        const viewCard = document.querySelector('.view-card');
+        const viewContent = document.getElementById('view-card-content');
+        const viewMsg = document.getElementById('view-card-disabled-msg');
+        viewCard?.classList.toggle('disabled-card', disabled);
+        if (viewContent) viewContent.hidden = disabled;
+        if (viewMsg) viewMsg.hidden = !disabled;
+
+        const minimapCard = document.querySelector('.minimap-card');
+        const minimapContent = document.getElementById('minimap-card-content');
+        const minimapMsg = document.getElementById('minimap-card-disabled-msg');
+        minimapCard?.classList.toggle('disabled-card', disabled);
+        if (minimapContent) minimapContent.hidden = disabled;
+        if (minimapMsg) minimapMsg.hidden = !disabled;
+    }
+
     // [MODIFIED] Tab은 암전 페이드 대신 카드 플립(scaleX 1->0->1)으로 전환.
     // 절반 지점(가장 얇아진 순간)에서 실제 뷰 축을 교체해, 뒷면이 뒤집히며 나타나는 것처럼 보이게 함.
     // hoverPoint(롱프레스로 마우스가 가리키던 칸, 캔버스 CSS px)가 있으면 그 칸의 좌표를 새 뷰의 고정
@@ -234,6 +258,7 @@ class Game {
     _toggleView(hoverPoint = null) {
         if (this.state !== GAME_STATE.PLAYING) return;
         if (this.depthTransition || this.flipTransition) return;
+        if (!this._viewToggleAllowed()) return;
 
         this.flipTransition = {
             t: 0,
@@ -272,6 +297,7 @@ class Game {
     _shiftView(delta) {
         if (this.state !== GAME_STATE.PLAYING) return;
         if (this.depthTransition || this.flipTransition) return;
+        if (!this._viewToggleAllowed()) return;
         // [MODIFIED] 경계라 실제로 슬라이스가 안 바뀌면 스냅샷/트랜지션 자체를 시작하지 않음(시각 효과 억제)
         if (!this.level.canShiftView(delta)) return;
 
@@ -350,8 +376,9 @@ class Game {
         this.level.load(index);
         this.level.calculateLayout(this.width, this.height);
         this.player.reset(this.level.playerStart.x, this.level.playerStart.y, this.level.playerStart.z);
-        // [MODIFIED] 새 레벨의 X:Y:Z 크기와 시작·목표 좌표를 첫 프레임 전에도 즉시 표시
-        this.sidebarUI.render(this.level, this.player, true);
+        // [MODIFIED] viewToggleEnabled: false인 레벨은 시점 전환 자체가 막혀 있어 시점 방향도/탑뷰
+        // 미니맵이 보여줄 정보가 없음 -- 캔버스를 그리는 대신 카드 콘텐츠 자체를 안내 문구로 교체
+        this._updateViewSidebarAvailability();
         this._updateEchoMarkers();
         this.state = GAME_STATE.PLAYING;
         this.transitionAlpha = 1;
@@ -359,28 +386,22 @@ class Game {
 
         this.tutorialAlpha = 0;
         this.tutorialMsg = '';
-        this.tutorialDialogIndex = 0;
-        this.tutorialDialogVisible = false;
 
+        // [MODIFIED] 대사창(tutorialDialog)은 제거하고 카드 튜토리얼(tutorial.cards)만 사용.
+        // hint는 튜토리얼 전용이 아니라 어떤 레벨에서든 쓸 수 있는 일반 힌트라 별도로 유지.
         const data = this.level.levelData;
-        if (data.tutorial && Array.isArray(data.tutorial) && data.tutorial.length > 0) {
-            this.tutorialDialog = null;
-            this.tutorialDialogVisible = false;
-            this.tutorialMsg = '';
+        const hasTutorialCards = data.tutorial && Array.isArray(data.tutorial.cards) && data.tutorial.cards.length > 0;
+        if (hasTutorialCards) {
             this.input.disable();
-            requestAnimationFrame(() => this._showTutorial(data.tutorial));
-        } else {
-            if (data.tutorialDialog && data.tutorialDialog.length > 0) {
-                this.tutorialDialog = data.tutorialDialog;
-                this.tutorialDialogVisible = true;
-            } else {
-                this.tutorialDialog = null;
-            }
+            requestAnimationFrame(() => this._showTutorial(data.tutorial.cards));
+        }
 
-            this.tutorialMsg = data.tutorialHint || '';
-            if (this.tutorialMsg) {
-                setTimeout(() => { this.tutorialMsg = ''; }, 6000);
-            }
+        // [MODIFIED] 버그 수정: 카드 튜토리얼이 있는 레벨은 카드가 떠 있는 동안 힌트의 6초 타이머가
+        // 같이 흘러가버려서, 사용자가 카드를 오래 보고 있으면 닫자마자(또는 그 전에) 힌트가 사라졌음.
+        // 카드가 있으면 타이머는 카드를 닫을 때(_closeTutorial)만 시작하고, 없으면 즉시 시작함.
+        this.tutorialMsg = data.hint || '';
+        if (this.tutorialMsg && !hasTutorialCards) {
+            setTimeout(() => { this.tutorialMsg = ''; }, 6000);
         }
     }
 
@@ -444,14 +465,16 @@ class Game {
         let hitWallY = initialSlide.hitWallY;
         let hitWallZ = initialSlide.hitWallZ;
         let moved = initialSlide.moved;
+        let portalHit = initialSlide.portalHit;
 
         if (!moved) {
             if (hitWallType !== TILE.RUBBER_WALL) return;
             moved = true;
         }
 
-        // [ORDER-DEPENDENT] 불 블록 검사는 자석 정지 반영이 끝난 최종 raw 도달 지점이 확정된 뒤에만 수행해야 함.
-        // 철 벽이 불 블록보다 더 가까우면 자석이 먼저 멈추므로 불 블록은 스캔 범위 밖이 됨.
+        // [MODIFIED] 버그 수정: 포탈은 이제 일반 통과 지형이라 _resolveSlide가 벽/철벽까지 슬라이딩한
+        // raw 도착점(x,y,z)을 반환함 -- 그 raw 지점까지 불을 검사해야 "포탈 너머 불"도 걸러짐(포탈을
+        // 특수 케이스로 취급해 검사 범위를 거기서 끊지 않음). 통과하면 마지막에 포탈 위치로 도착점 보정.
         const firePos = this._scanForFire(startX, startY, startZ, x, y, z, dx, dy, dz);
         if (firePos) {
             if (startState !== STATE.ICE) {
@@ -470,9 +493,16 @@ class Game {
             hitWallY = recalculated.hitWallY;
             hitWallZ = recalculated.hitWallZ;
             moved = recalculated.moved;
+            portalHit = recalculated.portalHit;
         }
 
         if (!moved) return;
+
+        // [MODIFIED] 불 검사를 통과한 뒤에만 최종 도착점을 포탈 위치로 보정 -- 골(포탈)을 별도 특수
+        // 지형으로 취급하지 않고, 일반 슬라이딩 결과에 마지막으로 얹는 후처리로 일반화함.
+        if (portalHit) {
+            x = portalHit.x; y = portalHit.y; z = portalHit.z;
+        }
 
         // Items picked up mid-move only take visual/state effect this turn;
         // their gameplay effect (magnet snap, electric passage) starts next turn.
@@ -619,17 +649,18 @@ class Game {
             else perpDx = 1;
         }
 
+        // [MODIFIED] 포탈은 더 이상 슬라이딩을 그 자리에서 확정 종료시키는 특수 지형이 아님 -- 다른
+        // 통과 가능 지형(바닥/아이템)과 동일하게 취급해 슬라이딩이 벽/철벽까지 계속 진행되도록 하고,
+        // 경로 중 처음 만난 포탈 좌표만 기록해뒀다가 루프 종료 후 최종 도착점을 그 좌표로 보정함.
+        // 이렇게 해야 "포탈 너머에 불이 있으면 그 스와이프 자체가 막혀야 한다"가 일반 슬라이딩/화재
+        // 판정 로직 안에서 자연스럽게 성립함(포탈을 특수 케이스로 따로 취급하지 않음).
+        let portalHit = null;
+
         while (true) {
             const nx = x + dx;
             const ny = y + dy;
             const nz = z + dz;
             const tile = this.level.getTile(nx, ny, nz);
-
-            if (tile === TILE.PORTAL) {
-                x = nx; y = ny; z = nz;
-                moved = true;
-                break;
-            }
 
             if (tile === TILE.ELECTRIC_DOOR && this.player.state === STATE.ELECTRIC) {
                 // If sliding through an electric door with electric state, we do NOT stop
@@ -644,6 +675,10 @@ class Game {
 
             x = nx; y = ny; z = nz;
             moved = true;
+
+            if (tile === TILE.PORTAL && !portalHit) {
+                portalHit = { x, y, z };
+            }
 
             // Magnet: stop if a metal wall is right beside the tile just entered
             // (checked along the perpendicular axis of the current view plane).
@@ -663,7 +698,9 @@ class Game {
             }
         }
 
-        return { x, y, z, hitWallType, hitWallX, hitWallY, hitWallZ, moved };
+        // [MODIFIED] 여기서는 raw 도착점(x,y,z)을 그대로 반환 -- 불 검사(_scanForFire)가 이 raw 지점까지
+        // 스캔해야 "포탈 너머 불"도 놓치지 않음. 포탈 위치 보정은 불 검사를 통과한 뒤 _movePlayer에서 적용.
+        return { x, y, z, hitWallType, hitWallX, hitWallY, hitWallZ, moved, portalHit };
     }
 
     _scanForFire(startX, startY, startZ, endX, endY, endZ, dx, dy, dz) {
@@ -911,7 +948,7 @@ class Game {
         ctx.restore();
 
         this._updateHUD();
-        this.sidebarUI.render(this.level, this.player);
+        if (!this.viewSidebarDisabled) this.sidebarUI.render(this.level, this.player);
         this._renderTutorial(ctx, w, h);
     }
 
@@ -944,7 +981,7 @@ class Game {
         }
 
         this._updateHUD();
-        this.sidebarUI.render(this.level, this.player);
+        if (!this.viewSidebarDisabled) this.sidebarUI.render(this.level, this.player);
         this._renderTutorial(ctx, w, h);
     }
 
@@ -1067,7 +1104,7 @@ class Game {
         // HUD (DOM-based, updated separately from render)
         this._updateHUD();
         // [MODIFIED] 이동 애니메이션과 Tab/Q/E 시점 변경을 현재 프레임의 사이드바에 실시간 반영
-        this.sidebarUI.render(this.level, this.player);
+        if (!this.viewSidebarDisabled) this.sidebarUI.render(this.level, this.player);
 
         this._renderTutorial(ctx, w, h);
     }
@@ -1172,46 +1209,6 @@ class Game {
             ctx.fillText(this.tutorialMsg, w / 2, ty + 22);
             ctx.globalAlpha = 1;
         }
-
-        if (this.tutorialDialogVisible && this.tutorialDialog) {
-            const dialog = this.tutorialDialog[this.tutorialDialogIndex];
-            if (dialog) {
-                ctx.globalAlpha = 0.95;
-                ctx.fillStyle = 'rgba(6, 18, 35, 0.95)';
-                const padding = 24;
-                const lineHeight = 24;
-                const lines = dialog.text.split('\n');
-                let maxWidth = 0;
-                ctx.font = '15px "Orbitron", sans-serif';
-                lines.forEach(line => {
-                    maxWidth = Math.max(maxWidth, ctx.measureText(line).width);
-                });
-                const boxW = Math.min(w - 80, maxWidth + padding * 2);
-                const boxH = lines.length * lineHeight + padding * 2 + 20;
-                const boxX = (w - boxW) / 2;
-                const boxY = h - boxH - 40;
-
-                this._roundRect(ctx, boxX, boxY, boxW, boxH, 20);
-                ctx.fill();
-
-                ctx.fillStyle = '#82F0FF';
-                ctx.font = 'bold 16px "Orbitron", sans-serif';
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'top';
-                ctx.fillText(dialog.speaker, boxX + padding, boxY + padding);
-
-                ctx.fillStyle = '#f2f2f2';
-                ctx.font = '14px "Orbitron", sans-serif';
-                lines.forEach((line, index) => {
-                    ctx.fillText(line, boxX + padding, boxY + padding + 28 + index * lineHeight);
-                });
-
-                ctx.fillStyle = '#888';
-                ctx.font = '12px "Orbitron", sans-serif';
-                ctx.fillText('Tap to continue', boxX + padding, boxY + boxH - padding - 12);
-                ctx.globalAlpha = 1;
-            }
-        }
     }
 
     _updateHUD() {
@@ -1233,41 +1230,25 @@ class Game {
             return;
         }
 
-        if (this.tutorialDialogVisible) {
-            this._advanceTutorialDialog();
-            return;
-        }
-
         if (this._tutorialPending) {
             this._closeTutorial();
             return;
         }
     }
 
-    _advanceTutorialDialog() {
-        if (!this.tutorialDialog) return;
-
-        this.tutorialDialogIndex += 1;
-        if (this.tutorialDialogIndex >= this.tutorialDialog.length) {
-            this.tutorialDialogVisible = false;
-            this.tutorialDialog = null;
-            return;
-        }
-    }
-
-    _showTutorial(ids) {
+    _showTutorial(cards) {
         this._tutorialPending = true;
         this.input.disable();
         this.tutorialAlpha = 0;
         this.tutorialMsg = '';
-        this.tutorialUI.show(ids, () => this._closeTutorial());
+        this.tutorialUI.show(cards, () => this._closeTutorial());
     }
 
     _closeTutorial() {
         this._tutorialPending = false;
         this.input.enable();
         this.state = GAME_STATE.PLAYING;
-        this.tutorialMsg = this.level.levelData.tutorialHint || '';
+        this.tutorialMsg = this.level.levelData.hint || '';
         if (this.tutorialMsg) {
             setTimeout(() => { this.tutorialMsg = ''; }, 6000);
         }

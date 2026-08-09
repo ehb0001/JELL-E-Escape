@@ -268,6 +268,33 @@ kbd,
     margin-top: 10px;
 }
 
+/* [MODIFIED] 레벨의 viewToggleEnabled: false일 때(튜토리얼 여부와 무관하게, 순수히 시점 전환 자체가
+   꺼져 있다는 사실만 근거로) 시점 방향도/탑뷰 미니맵 카드는 제목을 포함한 콘텐츠 전체를 렌더링하지 않고
+   이 안내 문구로 대체함(game.js가 #view-card-content/#minimap-card-content를 숨기고 이걸 보여줌).
+   카드 자체도 회색조로 톤 다운해 "지금은 다룰 수 없는 정보"라는 느낌을 줌. */
+.sidebar-card.disabled-card {
+    filter: grayscale(0.7);
+    opacity: 0.7;
+}
+
+/* [MODIFIED] hidden 속성이 붙었을 때 아래 display:flex 규칙에 밀리지 않도록 명시적으로 우선 처리
+   (그렇지 않으면 시점 전환이 켜져 있어도 이 안내 문구가 계속 같이 그려짐) */
+.sidebar-disabled-msg[hidden] {
+    display: none;
+}
+
+.sidebar-disabled-msg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 96px;
+    padding: 18px 12px;
+    color: rgba(180, 196, 218, 0.62);
+    font-size: 12px;
+    text-align: center;
+    line-height: 1.5;
+}
+
 .sidebar-heading {
     margin-bottom: 8px;
 }

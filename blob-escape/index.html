@@ -10,9 +10,9 @@
 
     <title>JELL-E: Escape the Lab</title>
 
-    <link rel="stylesheet" href="css/style.css?v=5">
+    <link rel="stylesheet" href="css/style.css?v=8">
     <!-- [MODIFIED] 기존 구조는 유지하면서 출시용 아트 디렉션을 독립된 시각 레이어로 적용 -->
-    <link rel="stylesheet" href="css/release.css?v=4">
+    <link rel="stylesheet" href="css/release.css?v=9">
 
     <!-- Favicon (inline SVG) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟢</text></svg>">
@@ -45,33 +45,41 @@
             <!-- [MODIFIED] 플레이어가 현재 뷰 슬라이스와 목표 위치를 게임 화면 옆에서 확인할 수 있도록 정보 패널 추가 -->
             <aside id="sidebar">
                 <section class="sidebar-card view-card" aria-labelledby="view-map-title">
-                    <div class="sidebar-heading">
-                        <div>
-                            <span class="sidebar-kicker">MAP ORIENTATION</span>
-                            <h2 id="view-map-title">현재 맵 시점</h2>
+                    <!-- [MODIFIED] viewToggleEnabled: false인 레벨에서는 제목까지 포함해 카드 전체를
+                         .sidebar-disabled-msg로 대체(회색조 톤 다운 포함) -->
+                    <div id="view-card-content">
+                        <div class="sidebar-heading">
+                            <div>
+                                <span class="sidebar-kicker">MAP ORIENTATION</span>
+                                <h2 id="view-map-title">현재 맵 시점</h2>
+                            </div>
+                            <span class="key-hint">TAB</span>
                         </div>
-                        <span class="key-hint">TAB</span>
+                        <canvas id="map-orientation" role="img" aria-label="현재 보고 있는 맵 슬라이스"></canvas>
+                        <div id="view-label" class="view-label">정면 (X-Y)</div>
+                        <div id="view-detail" class="view-detail">맵 정보를 불러오는 중</div>
                     </div>
-                    <canvas id="map-orientation" role="img" aria-label="현재 보고 있는 맵 슬라이스"></canvas>
-                    <div id="view-label" class="view-label">정면 (X-Y)</div>
-                    <div id="view-detail" class="view-detail">맵 정보를 불러오는 중</div>
+                    <div id="view-card-disabled-msg" class="sidebar-disabled-msg" hidden>이 레벨은 시점 전환이 꺼져 있어요</div>
                 </section>
 
                 <section class="sidebar-card minimap-card" aria-labelledby="minimap-title">
-                    <div class="sidebar-heading">
-                        <div>
-                            <span class="sidebar-kicker">LIVE POSITION</span>
-                            <h2 id="minimap-title">탑뷰 미니맵</h2>
+                    <div id="minimap-card-content">
+                        <div class="sidebar-heading">
+                            <div>
+                                <span class="sidebar-kicker">LIVE POSITION</span>
+                                <h2 id="minimap-title">탑뷰 미니맵</h2>
+                            </div>
+                        </div>
+                        <div id="minimap-viewport" class="minimap-viewport">
+                            <canvas id="topview-minimap" role="img" aria-label="플레이어와 목표 지점의 탑뷰 위치"></canvas>
+                        </div>
+                        <div id="minimap-ratio" class="minimap-ratio">실제 비율 X:Z</div>
+                        <div class="map-legend" aria-hidden="true">
+                            <span><i class="legend-player"></i>현재 위치</span>
+                            <span><i class="legend-goal"></i>목표</span>
                         </div>
                     </div>
-                    <div id="minimap-viewport" class="minimap-viewport">
-                        <canvas id="topview-minimap" role="img" aria-label="플레이어와 목표 지점의 탑뷰 위치"></canvas>
-                    </div>
-                    <div id="minimap-ratio" class="minimap-ratio">실제 비율 X:Z</div>
-                    <div class="map-legend" aria-hidden="true">
-                        <span><i class="legend-player"></i>현재 위치</span>
-                        <span><i class="legend-goal"></i>목표</span>
-                    </div>
+                    <div id="minimap-card-disabled-msg" class="sidebar-disabled-msg" hidden>이 레벨은 시점 전환이 꺼져 있어요</div>
                 </section>
 
                 <!-- [MODIFIED] Q/E·Tab 화면 대칭 여부와 효과음을 유저가 직접 고를 수 있는 설정 카드 추가 -->
@@ -136,12 +144,12 @@
     <script src="js/constants.js?v=5"></script>
     <script src="js/effects.js?v=4"></script>
     <script src="js/input.js?v=4"></script>
-    <script src="js/level_new.js?v=23"></script>
-    <script src="js/tutorial.js?v=1"></script>
+    <script src="js/level_new.js?v=26"></script>
+    <script src="js/tutorial.js?v=5"></script>
     <script src="js/player.js?v=8"></script>
     <!-- [MODIFIED] Game 생성 전에 SidebarMapUI 의존성을 사용할 수 있도록 game.js 바로 앞에서 로드 -->
-    <script src="js/sidebar.js?v=4"></script>
-    <script src="js/game.js?v=34"></script>
+    <script src="js/sidebar.js?v=6"></script>
+    <script src="js/game.js?v=41"></script>
 
 </body>
 </html>

@@ -2,21 +2,25 @@
   "id": 41,
   "name": "Tutorial: Basic Movement",
   "subtitle": "Slide through a winding path to reach the exit.",
-  "tutorial": ["movement"],
-  "tutorialHint": "Move up, then right, then up, then left to reach the portal.",
-  "tutorialDialog": [
-    {
-      "speaker": "영삼",
-      "text": "기본 이동을 연습하자.\n위로 이동한 뒤 오른쪽으로 이동하고,\n다시 위쪽으로 이동한 뒤 왼쪽으로 이동하면 탈출할 수 있어."
-    }
-  ],
+  "tutorial": {
+    "cards": [
+      {
+        "title": "Movement",
+        "color": "#69F0AE",
+        "body": "방향키 또는 스와이프로 이동하세요.\n막힐 때까지 이동합니다."
+      }
+    ]
+  },
+  "hint": "혹시 소용돌이 좋아하세요?",
+  "viewToggleEnabled": false,
   "map": [
     [
       "#########",
-      "#...X...#",
-      "#.###.#.#",
-      "#...#...#",
-      "#P......#",
+      "##......#",
+      "##...X#.#",
+      "##....#.#",
+      "#.##....#",
+      "#P.....##",
       "#########"
     ]
   ]

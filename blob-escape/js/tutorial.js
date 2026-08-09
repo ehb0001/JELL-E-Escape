@@ -3,133 +3,118 @@ class Tutorial {
         this.overlay = document.getElementById('ui-overlay');
         this.container = null;
         this.onClose = null;
+        this.cards = [];
+        this.index = 0;
     }
 
-    static ITEMS = {
-        movement: {
-            id: 'movement',
-            label: 'Movement',
-            color: '#69F0AE',
-            body: '방향키 또는 스와이프로 이동하세요.\n막힐 때까지 미끄러지듯 이동합니다.',
-            icons: null,
-        },
-        rubber_bounce: {
-            id: 'rubber_bounce',
-            label: 'Rubber bounce',
-            color: '#6D4C41',
-            body: '고무 벽에 부딪히면 뒤로 튕겨져 나옵니다.\n올바른 방향으로 튕겨져 나오도록 이동하세요.',
-            icons: null,
-        },
-        magnet_metal: {
-            id: 'magnet_metal',
-            label: 'Magnet + Metal',
-            color: '#4FC3F7',
-            body: '자석 아이템을 먹으면 철 벽을 지나갈 때 멈출 수 있습니다.\n철 벽을 이용해 목적지로 이동하세요.',
-            icons: null,
-        },
-        fire_block: {
-            id: 'fire_block',
-            label: 'Fire Block',
-            color: '#FF8A65',
-            body: '이동 경로에 불 블록이 있으면 그 방향으로 이동할 수 없습니다.\n우회로를 찾아 출구로 이동하세요.',
-            icons: null,
-        },
-        fire_ice_combo: {
-            id: 'fire_ice_combo',
-            label: 'Fire + Ice',
-            color: '#B2EBF2',
-            body: '얼음 아이템을 먹으면 불 블록을 식혀 일반 블록으로 바꿀 수 있습니다.',
-            icons: [
-                { emoji: '🔥', color: '#FF8A65' },
-                { emoji: '❄️', color: '#B2EBF2' },
-                { emoji: null, color: '#4a4a6a' },
-            ],
-        },
-        electric_door: {
-            id: 'electric_door',
-            label: 'Electric Door',
-            color: '#FFD54F',
-            body: '전기 문은 전기 상태가 아니면 통과할 수 없습니다.\n우회로를 찾아 출구로 이동하세요.',
-            icons: null,
-        },
-        electric_combo: {
-            id: 'electric_combo',
-            label: 'Electric Combo',
-            color: '#FFD54F',
-            body: '전기 아이템을 먹으면 전기 문을 통과할 수 있습니다.',
-            icons: [
-                { emoji: '⚡', color: '#FFD54F' },
-                { emoji: '🚪', color: '#FFD54F' },
-                { emoji: null, color: '#4a4a6a' },
-            ],
-        },
-    };
+    // [MODIFIED] 카드가 여러 개면 한 화면에 다 띄우지 않고 한 장씩 순차로 보여줌 -- 탭/클릭하면 다음
+    // 카드로 넘어가고, 마지막 카드에서 탭하면 그제서야 닫힘(onClose 호출).
+    show(cards, onClose) {
+        this.cards = cards.filter(Boolean);
+        this.index = 0;
+        this.onClose = onClose;
 
-    show(ids, onClose) {
         this.overlay.innerHTML = '';
         this.overlay.style.display = 'flex';
         this.overlay.style.pointerEvents = 'auto';
+        // [MODIFIED] 튜토리얼 카드가 떠 있는 동안만 뒷배경 블러/불투명도를 낮춰서 카드 뒤 게임 화면이
+        // 더 잘 비치게 함(레벨 선택 등 #ui-overlay를 공유하는 다른 화면에는 영향 없음)
+        this.overlay.classList.add('ui-overlay-tutorial');
+        this.overlay.addEventListener('click', this._handleCloseBound = this._handleAdvance.bind(this));
+
+        this._renderCurrent();
+    }
+
+    _renderCurrent() {
+        const item = this.cards[this.index];
+        if (!item) {
+            this.hide();
+            return;
+        }
 
         this.container = document.createElement('div');
         this.container.className = 'tutorial-overlay';
 
-        ids.forEach((id) => {
-            const item = Tutorial.ITEMS[id];
-            if (!item) return;
-            const card = document.createElement('div');
-            card.className = 'tutorial-card';
-            card.style.borderColor = `${item.color}4d`;
+        const color = item.color || '#69F0AE';
+        const card = document.createElement('div');
+        card.className = 'tutorial-card';
+        card.style.borderColor = `${color}4d`;
 
-            const label = document.createElement('div');
-            label.className = 'tutorial-label';
-            label.textContent = item.label;
-            label.style.color = item.color;
-            label.style.textShadow = `0 0 12px ${item.color}66`;
-            card.appendChild(label);
+        const label = document.createElement('div');
+        label.className = 'tutorial-label';
+        label.textContent = item.title;
+        label.style.color = color;
+        label.style.textShadow = `0 0 12px ${color}66`;
+        card.appendChild(label);
 
-            if (item.icons && item.icons.length > 0) {
-                const icons = document.createElement('div');
-                icons.className = 'tutorial-icons';
-                item.icons.forEach((entry, index) => {
-                    const icon = document.createElement('div');
-                    icon.className = 'tutorial-icon';
-                    icon.style.color = entry.color;
-                    icon.textContent = entry.emoji || '';
-                    icon.style.borderColor = entry.color + '44';
-                    icons.appendChild(icon);
-                    if (index < item.icons.length - 1) {
-                        const arrow = document.createElement('div');
-                        arrow.className = 'tutorial-icon-arrow';
-                        arrow.textContent = '→';
-                        icons.appendChild(arrow);
-                    }
-                });
-                card.appendChild(icons);
-            }
+        if (item.icons && item.icons.length > 0) {
+            const icons = document.createElement('div');
+            icons.className = 'tutorial-icons';
+            item.icons.forEach((entry, index) => {
+                const icon = document.createElement('div');
+                icon.className = 'tutorial-icon';
+                icon.style.color = entry.color;
+                icon.textContent = entry.emoji || '';
+                icon.style.borderColor = entry.color + '44';
+                icons.appendChild(icon);
+                if (index < item.icons.length - 1) {
+                    const arrow = document.createElement('div');
+                    arrow.className = 'tutorial-icon-arrow';
+                    arrow.textContent = '→';
+                    icons.appendChild(arrow);
+                }
+            });
+            card.appendChild(icons);
+        }
 
-            const body = document.createElement('p');
-            body.className = 'tutorial-body';
-            body.textContent = item.body;
-            card.appendChild(body);
+        const body = document.createElement('p');
+        body.className = 'tutorial-body';
+        // [MODIFIED] 레벨 JSON의 body 텍스트에서 **강조** 구간을 <b>로 렌더링할 수 있도록 지원.
+        // 이스케이프 후 마크업을 적용하므로 body에 실제 HTML 태그를 넣어도 그대로 문자로 표시됨.
+        body.innerHTML = this._formatBody(item.body);
+        card.appendChild(body);
 
-            this.container.appendChild(card);
-        });
+        this.container.appendChild(card);
 
+        const isLast = this.index >= this.cards.length - 1;
         const hint = document.createElement('div');
         hint.className = 'tutorial-hint';
-        hint.textContent = 'Tap or swipe anywhere to continue';
+        hint.textContent = isLast
+            ? 'Tap or swipe anywhere to continue'
+            : `Tap or swipe to continue (${this.index + 1}/${this.cards.length})`;
         this.container.appendChild(hint);
 
+        this.overlay.innerHTML = '';
         this.overlay.appendChild(this.container);
-        this.overlay.addEventListener('click', this._handleCloseBound = this._handleClose.bind(this));
-        this.onClose = onClose;
+    }
+
+    _handleAdvance() {
+        this.index += 1;
+        if (this.index >= this.cards.length) {
+            this._handleClose();
+            return;
+        }
+        this._renderCurrent();
     }
 
     hide() {
         this.overlay.removeEventListener('click', this._handleCloseBound);
         this.onClose = null;
         this.overlay.style.display = 'none';
+        this.overlay.classList.remove('ui-overlay-tutorial');
         this.overlay.innerHTML = '';
+    }
+
+    // [MODIFIED] "**굵게**" 구간을 <b>로, 줄바꿈(\n)을 <br>로 변환. 원본 텍스트는 먼저 이스케이프해서
+    // body에 실제 HTML 태그가 들어와도 무해한 텍스트로만 취급됨.
+    _formatBody(text) {
+        const escaped = String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        return escaped
+            .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+            .replace(/\n/g, '<br>');
     }
 
     _handleClose() {

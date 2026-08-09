@@ -188,12 +188,14 @@ class Level {
         return this.gridToPixel(v.col, v.row);
     }
 
+    // [MODIFIED] 맵이 작을 때(예: 3x3) 타일이 화면에 비해 과도하게 커지지 않도록 최대 크기 상한 추가
     calculateLayout(canvasWidth, canvasHeight) {
         const padding = 15;
+        const maxTileSize = 96;
         const availW = canvasWidth - padding * 2;
         const availH = canvasHeight - padding * 2;
         const { cols, rows } = this.getViewDimensions();
-        this.tileSize = Math.floor(Math.min(availW / cols, availH / rows));
+        this.tileSize = Math.floor(Math.min(availW / cols, availH / rows, maxTileSize));
         this.offsetX = Math.floor((canvasWidth - this.tileSize * cols) / 2);
         this.offsetY = Math.floor((canvasHeight - this.tileSize * rows) / 2);
     }
@@ -206,14 +208,14 @@ class Level {
         return this.grid[z][y][x];
     }
 
-    // [MODIFIED] 이 바닥(TILE.FLOOR) 또는 아이템 칸 위에서, E로 가는 다음 슬라이스의 같은 자리가 지나다닐 수
-    // 있는 곳(바닥/포탈/아이템 -- 벽은 절대 아님)이면 계속 이어지는 샤프트로 보고, 바닥 타일(또는 아이템 밑
-    // 바닥 백드롭)을 그리지 않아 게임 배경이 비쳐 보이게 함. 벽 타일은 이 규칙 대상이 아니라 항상 그대로 렌더링됨.
+    // [MODIFIED] 이 바닥(TILE.FLOOR)·아이템·포탈 칸 위에서, E로 가는 다음 슬라이스의 같은 자리가 지나다닐 수
+    // 있는 곳(바닥/포탈/아이템 -- 벽은 절대 아님)이면 계속 이어지는 샤프트로 보고, 바닥 타일(또는 아이템/포탈
+    // 밑 바닥 백드롭)을 그리지 않아 게임 배경이 비쳐 보이게 함. 벽 타일은 이 규칙 대상이 아니라 항상 그대로 렌더링됨.
     // E가 바꾸는 축은 현재 뷰에 따라 다름(X-Y 뷰는 viewZ, Z-Y 뷰는 viewX) -- viewAxis 기준으로 맞춰서 다음 칸을 계산.
     // 게임플레이(이동/충돌)는 그대로 원래 타일로 취급되므로 영향 없음, 순수 렌더링 판단용.
     isOpenShaftCell(x, y, z) {
         const tile = this.getTile(x, y, z);
-        if (tile !== TILE.FLOOR && !isItem(tile)) return false;
+        if (tile !== TILE.FLOOR && tile !== TILE.PORTAL && !isItem(tile)) return false;
 
         let nextTile;
         if (this.viewAxis === 'x') {
@@ -384,8 +386,10 @@ class Level {
         // [MODIFIED] 이 바닥 칸과 다음 슬라이스(E 방향)의 같은 자리가 지나다닐 수 있는 곳(바닥/포탈/아이템)이면
         // 위아래로 이어지는 샤프트로 보고 타일을 그리지 않아 게임 배경이 비쳐 보이게 함. 벽 타일은 항상 그대로 렌더링.
         if (tile === TILE.FLOOR && this.isOpenShaftCell(gx, gy, gz)) return;
-        // 아이템도 같은 샤프트 조건이면 아이콘은 그대로 그리되 밑에 깔리는 바닥 백드롭만 빼서 배경이 비치게 함.
+        // 아이템/포탈도 같은 샤프트 조건이면 아이콘·이펙트는 그대로 그리되 밑에 깔리는 바닥 백드롭만 빼서
+        // 배경이 비치게 함. 뚫려있지 않으면(뒷 층이 막혀있으면) 다른 타일처럼 정상적으로 배경을 채움.
         const skipItemBackdrop = isItem(tile) && this.isOpenShaftCell(gx, gy, gz);
+        const skipPortalBackdrop = tile === TILE.PORTAL && this.isOpenShaftCell(gx, gy, gz);
 
         const gap = 1;
         const innerX = px + gap;
@@ -394,33 +398,15 @@ class Level {
 
         ctx.save();
 
-        // Base floor for items and doors
-        // [MODIFIED] 골(PORTAL)은 바닥 배경 없이 자체 이펙트만 보이도록 제외
-        if ((isItem(tile) && !skipItemBackdrop) || tile === TILE.ELECTRIC_DOOR) {
-            ctx.fillStyle = TILE_COLORS[TILE.FLOOR].fill;
-            ctx.fillRect(innerX, innerY, innerS, innerS);
+        // Base floor for items, doors, and portal -- [MODIFIED] 단색 대신 FLOOR와 같은 패널 이음새·회로
+        // 노드 무늬로 채워서, 뚫리지 않은 아이템/포탈/전기문 칸이 일반 바닥 칸과 동일한 재질로 보이게 함.
+        if ((isItem(tile) && !skipItemBackdrop) || tile === TILE.ELECTRIC_DOOR || (tile === TILE.PORTAL && !skipPortalBackdrop)) {
+            this._renderFloorBackdrop(ctx, innerX, innerY, innerS, s, gx, gy, gz);
         }
 
         switch (tile) {
             case TILE.FLOOR:
-                // [MODIFIED] 단색 바닥 대신 패널 이음새와 회로 노드를 넣어 연구시설 재질을 표현
-                ctx.fillStyle = TILE_COLORS[TILE.FLOOR].fill;
-                ctx.fillRect(innerX, innerY, innerS, innerS);
-                ctx.strokeStyle = 'rgba(68, 111, 153, 0.17)';
-                ctx.lineWidth = Math.max(0.5, s * 0.018);
-                ctx.strokeRect(innerX + 0.5, innerY + 0.5, innerS - 1, innerS - 1);
-                if (s >= 18) {
-                    const circuitSeed = (gx * 17 + gy * 11 + gz * 7) % 4;
-                    ctx.strokeStyle = 'rgba(85, 155, 179, 0.13)';
-                    ctx.beginPath();
-                    ctx.moveTo(innerX + innerS * 0.18, innerY + innerS * (0.25 + circuitSeed * 0.12));
-                    ctx.lineTo(innerX + innerS * 0.46, innerY + innerS * (0.25 + circuitSeed * 0.12));
-                    ctx.lineTo(innerX + innerS * 0.61, innerY + innerS * 0.5);
-                    ctx.lineTo(innerX + innerS * 0.82, innerY + innerS * 0.5);
-                    ctx.stroke();
-                    ctx.fillStyle = 'rgba(120, 255, 214, 0.2)';
-                    ctx.beginPath(); ctx.arc(innerX + innerS * 0.82, innerY + innerS * 0.5, Math.max(0.7, s * 0.018), 0, Math.PI * 2); ctx.fill();
-                }
+                this._renderFloorBackdrop(ctx, innerX, innerY, innerS, s, gx, gy, gz);
                 break;
 
             case TILE.WALL:
@@ -504,6 +490,28 @@ class Level {
                 break;
         }
         ctx.restore();
+    }
+
+    // [MODIFIED] FLOOR 타일 재질(패널 이음새 + 회로 노드)을 별도 함수로 분리 -- 순수 바닥 칸뿐 아니라
+    // 뚫려있지 않은 아이템/포탈/전기문 칸의 배경으로도 재사용해서 같은 바닥 재질처럼 보이게 함.
+    _renderFloorBackdrop(ctx, innerX, innerY, innerS, s, gx, gy, gz) {
+        ctx.fillStyle = TILE_COLORS[TILE.FLOOR].fill;
+        ctx.fillRect(innerX, innerY, innerS, innerS);
+        ctx.strokeStyle = 'rgba(68, 111, 153, 0.17)';
+        ctx.lineWidth = Math.max(0.5, s * 0.018);
+        ctx.strokeRect(innerX + 0.5, innerY + 0.5, innerS - 1, innerS - 1);
+        if (s >= 18) {
+            const circuitSeed = (gx * 17 + gy * 11 + gz * 7) % 4;
+            ctx.strokeStyle = 'rgba(85, 155, 179, 0.13)';
+            ctx.beginPath();
+            ctx.moveTo(innerX + innerS * 0.18, innerY + innerS * (0.25 + circuitSeed * 0.12));
+            ctx.lineTo(innerX + innerS * 0.46, innerY + innerS * (0.25 + circuitSeed * 0.12));
+            ctx.lineTo(innerX + innerS * 0.61, innerY + innerS * 0.5);
+            ctx.lineTo(innerX + innerS * 0.82, innerY + innerS * 0.5);
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(120, 255, 214, 0.2)';
+            ctx.beginPath(); ctx.arc(innerX + innerS * 0.82, innerY + innerS * 0.5, Math.max(0.7, s * 0.018), 0, Math.PI * 2); ctx.fill();
+        }
     }
 
     _renderGradientTile(ctx, x, y, s, colors) {
