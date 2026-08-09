@@ -114,6 +114,13 @@ body.at-title #game-container {
     background: rgba(255, 255, 255, 0.2);
 }
 
+/* [MODIFIED] "▦" 아이콘 대신 "Lv" 텍스트로 변경 -- 격자 아이콘보다 목적이 직관적 */
+#title-bar-levelselect {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
 /* ── Main Row ── */
 #main-row {
     flex: 1;
@@ -376,15 +383,48 @@ body.at-title #game-container {
     flex-direction: column;
 }
 
+/* [MODIFIED] 제목과 닫기(X) 아이콘을 한 줄에 배치하는 헤더 -- 기존 title의 margin-bottom을 여기로 이전 */
+.level-select-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+}
+
 .level-select-title {
     font-size: 20px;
     font-weight: 700;
     color: #69F0AE;
-    margin-bottom: 20px;
     text-shadow: 0 0 20px rgba(105, 240, 174, 0.5);
     letter-spacing: 3px;
     text-transform: uppercase;
-    flex-shrink: 0;
+}
+
+/* [MODIFIED] 레벨 선택 화면을 배경 클릭/Esc와 함께 명시적으로 닫을 수 있는 X 아이콘 버튼 */
+.level-select-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.04);
+    color: #ccc;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.level-select-close:hover,
+.level-select-close:focus-visible {
+    background: rgba(105, 240, 174, 0.14);
+    border-color: rgba(105, 240, 174, 0.4);
+    color: #69F0AE;
+    outline: none;
 }
 
 .level-grid {

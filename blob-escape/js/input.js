@@ -27,12 +27,18 @@ class Input {
         this.lastMouseY = 0;
         // [MODIFIED] 버튼과 동일한 재시작 요청을 물리 키 위치 기준으로 전달하기 위한 전용 콜백
         this.restartCallback = null;
+        // [MODIFIED] Esc로 레벨 선택 등 오버레이를 닫기 위한 콜백
+        this.cancelCallback = null;
 
         this._bindEvents();
     }
 
     onSwipe(callback) {
         this.swipeCallback = callback;
+    }
+
+    onCancel(callback) {
+        this.cancelCallback = callback;
     }
 
     onTap(callback) {
@@ -158,6 +164,14 @@ class Input {
             if (this.restartCallback) {
                 e.preventDefault();
                 this.restartCallback();
+            }
+            return;
+        }
+
+        if (e.key === 'Escape') {
+            if (this.cancelCallback) {
+                e.preventDefault();
+                this.cancelCallback();
             }
             return;
         }

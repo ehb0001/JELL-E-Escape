@@ -257,6 +257,13 @@ class Level {
         this._invalidateBoardCache();
     }
 
+    // [MODIFIED] 슬라이딩 재계산에만 필요한 로직용 소화 상태를 되돌리기 위한 짝 함수 -- 실제 화면에
+    // 반영되는 소화는 플레이어가 그 칸에 도달한 시점(Game.doSecondaryMove)에 extinguishFire를 다시 호출함.
+    unextinguishFire(x, y, z = this.viewZ) {
+        this.extinguishedFire.delete(`${x},${y},${z}`);
+        this._invalidateBoardCache();
+    }
+
     triggerRubberBounce(x, y, z = this.viewZ) {
         this.rubberHitMap.set(`${x},${y},${z}`, 0.4); // 0.4s animation
     }

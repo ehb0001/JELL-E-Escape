@@ -78,6 +78,8 @@ class Game {
         });
         // [MODIFIED] 한글/영문 입력 상태와 무관한 물리 R 키 재시작 요청을 게임 상태 핸들러에 연결
         this.input.onRestart(() => this._handleRestartRequest());
+        // [MODIFIED] Esc로 레벨 선택 화면 닫기 -- 레벨 선택 상태가 아니면 _closeLevelSelect가 자체 가드로 무시함
+        this.input.onCancel(() => this._closeLevelSelect());
 
         this.tutorialUI = new Tutorial();
         this._tutorialPending = false;
@@ -314,11 +316,35 @@ class Game {
     // ── State Transitions ──
 
     _startLevelSelect() {
+        // [MODIFIED] 타이틀에서 들어왔음을 기록 -- 닫을 때(배경 클릭/Esc/X) 타이틀로 돌아가야 함
+        this.levelSelectReturnState = GAME_STATE.TITLE;
         this.state = GAME_STATE.LEVEL_SELECT;
         this.audio.playButtonClick();
         this._setupLevelSelectUI();
         document.body.classList.remove('at-title');
         this._resize();
+    }
+
+    // [MODIFIED] 배경 클릭/Esc/X 아이콘으로 레벨 선택을 닫을 때, 열기 전 상태(타이틀/인게임/클리어 화면)로 복귀.
+    _closeLevelSelect() {
+        if (this.state !== GAME_STATE.LEVEL_SELECT) return;
+        const overlay = document.getElementById('ui-overlay');
+
+        if (this.levelSelectReturnState === GAME_STATE.TITLE) {
+            overlay.style.display = 'none';
+            overlay.innerHTML = '';
+            this.state = GAME_STATE.TITLE;
+            document.body.classList.add('at-title');
+            this._resize();
+        } else if (this.levelSelectReturnState === GAME_STATE.LEVEL_CLEAR) {
+            // 클리어 카드가 원래 이 오버레이를 쓰고 있었으므로 다시 그려서 복원
+            this.state = GAME_STATE.LEVEL_CLEAR;
+            this._showClearScreen();
+        } else {
+            overlay.style.display = 'none';
+            overlay.innerHTML = '';
+            this.state = this.levelSelectReturnState || GAME_STATE.PLAYING;
+        }
     }
 
     _setupLevelSelectUI() {
@@ -329,10 +355,28 @@ class Game {
         const container = document.createElement('div');
         container.className = 'level-select-container';
 
+        // [MODIFIED] 배경(오버레이) 클릭 시 닫기 -- 카드 자체를 클릭한 경우는 버블링으로 여기까지
+        // 오지 않도록 container에서 stopPropagation
+        overlay.addEventListener('click', () => this._closeLevelSelect());
+        container.addEventListener('click', (e) => e.stopPropagation());
+
+        const header = document.createElement('div');
+        header.className = 'level-select-header';
+
         const title = document.createElement('h2');
         title.textContent = 'Select Stage';
         title.className = 'level-select-title';
-        container.appendChild(title);
+        header.appendChild(title);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'level-select-close';
+        closeBtn.setAttribute('aria-label', 'Close');
+        closeBtn.textContent = '✕';
+        closeBtn.addEventListener('click', () => this._closeLevelSelect());
+        header.appendChild(closeBtn);
+
+        container.appendChild(header);
 
         const grid = document.createElement('div');
         grid.className = 'level-grid';
@@ -472,8 +516,13 @@ class Game {
                 return;
             }
 
+            // [MODIFIED] itemsConsumed와 같은 패턴: 슬라이딩 재계산(_resolveSlide)이 "불이 꺼져서 지나갈
+            // 수 있는 NORMAL 상태" 기준으로 막힘 판정을 해야 하므로, 로직용으로만 잠깐 소화 상태/플레이어
+            // 상태를 반영했다가 재계산 직후 원래대로 되돌림. 실제로 화면에 반영되는 소화(extinguishFire)와
+            // changeState(색 전환 이펙트 포함) 호출은 doSecondaryMove에서 플레이어가 그 칸에 도달한
+            // 시점에 한 번만 실행 -- 불 블록이 사라지는 것도 이동 시작이 아니라 도착 시점에 보이게 함.
             this.level.extinguishFire(firePos.x, firePos.y, firePos.z);
-            this.player.changeState(STATE.NORMAL, null, undefined, undefined);
+            this.player.state = STATE.NORMAL;
 
             const recalculated = this._resolveSlide(startX, startY, startZ, dx, dy, dz);
             x = recalculated.x;
@@ -485,6 +534,9 @@ class Game {
             hitWallZ = recalculated.hitWallZ;
             moved = recalculated.moved;
             portalHit = recalculated.portalHit;
+
+            this.player.state = startState;
+            this.level.unextinguishFire(firePos.x, firePos.y, firePos.z);
         }
 
         if (!moved) return;
@@ -543,6 +595,19 @@ class Game {
         };
 
         const doSecondaryMove = () => {
+             // [MODIFIED] itemsConsumed와 동일한 패턴: 플레이어가 실제로 그 칸(불이 있던 자리)에 도달한
+             // 시점에 실제 소화(extinguishFire)와 changeState를 한 번에 실행해서, 불 블록이 사라지는 것도
+             // 파티클/사운드/색 전환 플래시도 전부 이동 시작이 아니라 도착 시점에 함께 나타나게 함.
+             if (firePos) {
+                 this.level.extinguishFire(firePos.x, firePos.y, firePos.z);
+                 const pos = this._gridToPixel(firePos.x, firePos.y, firePos.z);
+                 if (pos) {
+                     this.particles.burstStateChange(pos.x, pos.y, STATE_INFO[STATE.ICE].color);
+                     this.audio.playStateChange();
+                 }
+                 this.player.changeState(STATE.NORMAL, null, pos && pos.x, pos && pos.y);
+             }
+
              itemsConsumed.forEach(item => {
                  this.level.consumeItem(item.x, item.y, item.z);
                  const pos = this._gridToPixel(item.x, item.y, item.z);
@@ -1316,6 +1381,8 @@ class Game {
         // New navigation helper is kept at the end of the class per repository placement rules.
         // [MODIFIED] 플레이 중 상단 컨트롤과 클리어 카드가 동일한 레벨 선택 진입 경로를 공유
         if (this.state !== GAME_STATE.PLAYING && this.state !== GAME_STATE.LEVEL_CLEAR) return;
+        // [MODIFIED] 닫을 때(배경 클릭/Esc/X) 이 상태로 복귀하기 위해 기록
+        this.levelSelectReturnState = this.state;
         this.state = GAME_STATE.LEVEL_SELECT;
         this.audio.playButtonClick();
         this._setupLevelSelectUI();
