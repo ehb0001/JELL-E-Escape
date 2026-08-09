@@ -48,13 +48,17 @@ class Level {
 
         // [MODIFIED] 설정에서 켜고 끄는 화면 대칭(미러) 상태 -- 사용자 취향이라 load()에서 리셋하지 않음.
         // z: X-Y 뷰(h=X축 반전, v=Y축 반전), x: Z-Y 뷰(h=Z축 반전, v=Y축 반전)
+        // [MODIFIED] Z-Y 뷰는 좌우반전 상태를 기본값으로 정의
         this.mirror = {
             z: { h: false, v: false },
-            x: { h: false, v: false },
+            x: { h: true, v: false },
         };
 
         // Effects state
         this.rubberHitMap = new Map(); // "x,y,z" -> timer
+
+        // [MODIFIED] 플레이어/골 에코 마커(정지 시점 좌표) -- setEchoMarkers 참고
+        this.echoMarkers = [];
     }
 
     load(levelIndex) {
@@ -267,6 +271,13 @@ class Level {
         this.renderBoard(ctx);
     }
 
+    // [MODIFIED] 플레이어/골의 X-Y 위치를 다른 층에서도 대략 파악할 수 있도록, 이동이 끝나 자리를 잡았을 때만
+    // Game이 갱신해주는 정지 좌표 목록. 현재 보고 있는 슬라이스와 다른 층/열에 있을 때만 은은한 원 마커로 표시.
+    // { x, y, z, color } 형태 -- render 시점엔 z(또는 x)만 보고 "지금 슬라이스가 아닌 경우"를 판단.
+    setEchoMarkers(markers) {
+        this.echoMarkers = markers;
+    }
+
     // [MODIFIED] Q/E·Tab 뷰 트랜지션이 배경(실험실 홀로그램 그라디언트+격자)은 건드리지 않고
     // 보드(패널+타일)만 확대/축소·플립하도록 배경과 보드 렌더를 분리.
     // 맵이 공중에 떠 있는 실험실 홀로그램 보드처럼 보이도록 배경·프레임·깊이감을 추가한 부분은 이 안에 유지.
@@ -320,6 +331,53 @@ class Level {
                 this._renderTile(ctx, tile, px, py, this.tileSize, g.x, g.y, g.z);
             }
         }
+
+        this._renderEchoMarkers(ctx);
+    }
+
+    // [MODIFIED] 플레이어/골과 X-Y 좌표는 같지만 다른 층(슬라이스)에 있는 칸 위에 은은한 원 마커를 그려서
+    // 지금 보고 있지 않은 층에서도 대략적인 위치를 짐작할 수 있게 함. 슬라이스가 정확히 일치하면(실제로 보이면) 생략.
+    _renderEchoMarkers(ctx) {
+        if (!this.echoMarkers || this.echoMarkers.length === 0) return;
+        const { cols, rows } = this.getViewDimensions();
+        const mirror = this.mirror[this.viewAxis];
+
+        for (const marker of this.echoMarkers) {
+            let col, row, onCurrentSlice;
+            if (this.viewAxis === 'x') {
+                onCurrentSlice = Math.round(marker.x) === this.viewX;
+                col = this.depth - 1 - marker.z;
+                row = marker.y;
+            } else {
+                onCurrentSlice = Math.round(marker.z) === this.viewZ;
+                col = marker.x;
+                row = marker.y;
+            }
+            if (onCurrentSlice) continue;
+            if (mirror.h) col = cols - 1 - col;
+            if (mirror.v) row = rows - 1 - row;
+            if (col < 0 || row < 0 || col >= cols || row >= rows) continue;
+
+            const cx = this.offsetX + (col + 0.5) * this.tileSize;
+            const cy = this.offsetY + (row + 0.5) * this.tileSize;
+            const r = this.tileSize * 0.42;
+
+            ctx.save();
+            const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+            glow.addColorStop(0, `${marker.color}00`);
+            glow.addColorStop(0.7, `${marker.color}33`);
+            glow.addColorStop(1, `${marker.color}00`);
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = `${marker.color}55`;
+            ctx.lineWidth = Math.max(1, this.tileSize * 0.035);
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 0.86, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
     }
 
     _renderTile(ctx, tile, px, py, s, gx, gy, gz = this.viewZ) {
@@ -337,7 +395,8 @@ class Level {
         ctx.save();
 
         // Base floor for items and doors
-        if ((isItem(tile) && !skipItemBackdrop) || tile === TILE.PORTAL || tile === TILE.ELECTRIC_DOOR) {
+        // [MODIFIED] 골(PORTAL)은 바닥 배경 없이 자체 이펙트만 보이도록 제외
+        if ((isItem(tile) && !skipItemBackdrop) || tile === TILE.ELECTRIC_DOOR) {
             ctx.fillStyle = TILE_COLORS[TILE.FLOOR].fill;
             ctx.fillRect(innerX, innerY, innerS, innerS);
         }

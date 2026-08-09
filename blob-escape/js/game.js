@@ -63,7 +63,8 @@ class Game {
         this.depthSnapshotCanvas = document.createElement('canvas');
         this.depthSnapshotCtx = this.depthSnapshotCanvas.getContext('2d');
         this.depthTransition = null; // { t, duration, direction }
-        this.depthTransitionDuration = 0.32;
+        // [MODIFIED] Q/E 연속 입력 텀을 줄여달라는 요청으로 트랜지션 길이 단축(0.32 -> 0.25)
+        this.depthTransitionDuration = 0.25;
 
         // [MODIFIED] Tab 축 전환 전용 카드 플립 트랜지션(scaleX 1->0->1, 중간 지점에서 뷰 교체).
         this.flipTransition = null; // { t, duration, applied, change }
@@ -339,6 +340,7 @@ class Game {
         this.player.reset(this.level.playerStart.x, this.level.playerStart.y, this.level.playerStart.z);
         // [MODIFIED] 새 레벨의 X:Y:Z 크기와 시작·목표 좌표를 첫 프레임 전에도 즉시 표시
         this.sidebarUI.render(this.level, this.player, true);
+        this._updateEchoMarkers();
         this.state = GAME_STATE.PLAYING;
         this.transitionAlpha = 1;
         this.transitionTarget = 0;
@@ -686,6 +688,16 @@ class Game {
 
         this.state = GAME_STATE.PLAYING;
         this.input.enable();
+        this._updateEchoMarkers();
+    }
+
+    // [MODIFIED] 플레이어/골의 X-Y 위치를 다른 층에서도 대략 짐작할 수 있도록, 이동이 완전히 끝나
+    // 자리를 잡았을 때만(애니메이션 중엔 갱신 안 함) 정지 좌표로 에코 마커를 갱신.
+    _updateEchoMarkers() {
+        this.level.setEchoMarkers([
+            { x: this.player.gridX, y: this.player.gridY, z: this.player.gridZ, color: STATE_INFO[this.player.state].color },
+            { x: this.level.portalPos.x, y: this.level.portalPos.y, z: this.level.portalPos.z, color: TILE_COLORS[TILE.PORTAL].stroke },
+        ]);
     }
 
     _levelClear() {
@@ -725,13 +737,17 @@ class Game {
 
     // ── Settings (view mirroring, sound) ──
 
+    // [MODIFIED] Z-Y 뷰는 좌우반전이 기본 상태(코드에 고정)라, 토글 UI는 항상 꺼진 채로 보여주고
+    // "그 기본 위에 한 번 더 반전할지"만 나타냄. 실제 반전 여부 = 기본값 XOR 토글값.
+    static MIRROR_X_H_BASE = true;
+
     // [MODIFIED] 저장된 대칭/효과음 설정을 불러와 level.mirror·audio.enabled에 반영하고,
     // 사이드바 설정 카드의 체크박스 초기값/변경 이벤트를 연결
     _setupSettingsUI() {
         const settings = this._loadSettings();
         this.level.mirror.z.h = settings.mirrorZH;
         this.level.mirror.z.v = settings.mirrorZV;
-        this.level.mirror.x.h = settings.mirrorXH;
+        this.level.mirror.x.h = settings.mirrorXHToggle !== Game.MIRROR_X_H_BASE;
         this.level.mirror.x.v = settings.mirrorXV;
         this.audio.enabled = settings.soundOn;
 
@@ -747,7 +763,7 @@ class Game {
 
         bind('setting-mirror-z-h', settings.mirrorZH, (v) => { this.level.mirror.z.h = v; });
         bind('setting-mirror-z-v', settings.mirrorZV, (v) => { this.level.mirror.z.v = v; });
-        bind('setting-mirror-x-h', settings.mirrorXH, (v) => { this.level.mirror.x.h = v; });
+        bind('setting-mirror-x-h', settings.mirrorXHToggle, (v) => { this.level.mirror.x.h = v !== Game.MIRROR_X_H_BASE; });
         bind('setting-mirror-x-v', settings.mirrorXV, (v) => { this.level.mirror.x.v = v; });
         bind('setting-sound', settings.soundOn, (v) => { this.audio.enabled = v; });
     }
@@ -756,7 +772,7 @@ class Game {
         return {
             mirrorZH: this.level.mirror.z.h,
             mirrorZV: this.level.mirror.z.v,
-            mirrorXH: this.level.mirror.x.h,
+            mirrorXHToggle: this.level.mirror.x.h !== Game.MIRROR_X_H_BASE,
             mirrorXV: this.level.mirror.x.v,
             soundOn: this.audio.enabled,
         };
@@ -769,7 +785,7 @@ class Game {
     }
 
     _loadSettings() {
-        const defaults = { mirrorZH: false, mirrorZV: false, mirrorXH: false, mirrorXV: false, soundOn: true };
+        const defaults = { mirrorZH: false, mirrorZV: false, mirrorXHToggle: false, mirrorXV: false, soundOn: true };
         try {
             const raw = localStorage.getItem('jelle_settings');
             if (!raw) return defaults;
