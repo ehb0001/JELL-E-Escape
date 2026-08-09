@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## Rendering performance optimization
+
+- Cached the static laboratory background and non-animated map tiles in offscreen canvases; only characters, items, portals, doors, fire, rubber walls, particles, and echo markers remain live-rendered.
+- Split sidebar invalidation so orientation, minimap, and labels update independently, and skipped unchanged HUD DOM writes.
+- Limited portal particle emission to 30 Hz, reduced each particle to one blur pass, and changed pool allocation to a rotating index.
+- Cached the magnet visual's nearest-metal-wall search and removed the inactive full-map `TILE.ELECTRIC` scan.
+- Capped the main canvas backing scale at 2x and removed the redundant full-screen overlay backdrop blur.
+
 원본 대비 변경 사항 정리.
 
 ## 튜토리얼 순서·UI 컨트롤 보완

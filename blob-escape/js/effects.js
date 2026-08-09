@@ -53,7 +53,8 @@ class Particle {
 
         ctx.globalAlpha = this.alpha;
         ctx.fillStyle = '#F5FFFF';
-        ctx.shadowBlur = this.size * 2;
+        // [MODIFIED] Keep one glow pass per particle; the bright core does not need a second blur filter.
+        ctx.shadowBlur = 0;
         ctx.beginPath();
         ctx.arc(this.x, this.y, Math.max(0.6, this.size * 0.38), 0, Math.PI * 2);
         ctx.fill();
@@ -64,14 +65,22 @@ class Particle {
 class ParticleSystem {
     constructor(poolSize = 300) {
         this.pool = [];
+        this.nextParticleIndex = 0;
+        this.lastPortalEmitTime = -Infinity;
         for (let i = 0; i < poolSize; i++) {
             this.pool.push(new Particle());
         }
     }
 
     _getParticle() {
-        for (const p of this.pool) {
-            if (!p.active) return p;
+        // [MODIFIED] Continue from the last allocation instead of rescanning the pool from index zero.
+        for (let i = 0; i < this.pool.length; i++) {
+            const index = (this.nextParticleIndex + i) % this.pool.length;
+            const particle = this.pool[index];
+            if (!particle.active) {
+                this.nextParticleIndex = (index + 1) % this.pool.length;
+                return particle;
+            }
         }
         return null;
     }
@@ -120,6 +129,9 @@ class ParticleSystem {
 
     // Portal swirl particles
     emitPortalSwirl(x, y, time) {
+        // [MODIFIED] Emit at a stable 30 Hz so high refresh-rate screens do not create extra particles.
+        if (time - this.lastPortalEmitTime < 1 / 30) return;
+        this.lastPortalEmitTime = time;
         const angle = time * 3;
         const radius = 15 + Math.sin(time * 5) * 5;
         const px = x + Math.cos(angle) * radius;

@@ -34,6 +34,7 @@ class Game {
         this.input = new Input(this.canvas);
         // [MODIFIED] 게임의 뷰·플레이어 상태를 우측 방향도와 미니맵에 동기화하기 위한 전용 UI 시스템
         this.sidebarUI = new SidebarMapUI();
+        this.lastHUDKey = '';
 
         // [MODIFIED] X-Y/Z-Y 뷰 대칭, 효과음 온/오프 설정 -- 저장된 값을 불러와 level.mirror/audio에 적용하고
         // 사이드바 설정 카드의 체크박스와 양방향으로 동기화
@@ -92,7 +93,8 @@ class Game {
     // ── Resize ──
 
     _resize() {
-        const dpr = window.devicePixelRatio || 1;
+        // [MODIFIED] Cap backing-store density so 3x/4x displays do not multiply blur cost excessively.
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
         this.dpr = dpr; // [MODIFIED] Q/E 스냅샷 캔버스에도 동일한 dpr 변환을 적용하기 위해 보관
         const rect = this.container.getBoundingClientRect();
         this.width = rect.width;
@@ -1115,18 +1117,6 @@ class Game {
             }
         }
 
-        // Electric wall sparks (only meaningful on the X-Y view)
-        if (this.level.viewAxis === 'z' && Math.random() < 0.3) {
-            for (let y = 0; y < this.level.height; y++) {
-                for (let x = 0; x < this.level.width; x++) {
-                    if (this.level.getTile(x, y) === TILE.ELECTRIC && Math.random() < 0.03) {
-                        const ep = this._gridToPixel(x, y, this.level.viewZ);
-                        if (ep) this.particles.emitSparks(ep.x, ep.y);
-                    }
-                }
-            }
-        }
-
         // Particles
         this.particles.render(ctx);
 
@@ -1207,6 +1197,14 @@ class Game {
 
     _updateHUD() {
         const stateInfo = STATE_INFO[this.player.state];
+        const hudKey = [
+            this.level.levelData.id,
+            this.level.levelData.name,
+            this.player.state,
+            this.player.moveCount,
+        ].join('|');
+        if (hudKey === this.lastHUDKey) return;
+        this.lastHUDKey = hudKey;
 
         this.el.stageNum.textContent = `Stage ${this.level.levelData.id}`;
         this.el.stageName.textContent = this.level.levelData.name;

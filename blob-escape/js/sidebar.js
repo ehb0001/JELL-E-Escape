@@ -8,34 +8,49 @@ class SidebarMapUI {
         this.viewLabel = document.getElementById('view-label');
         this.viewDetail = document.getElementById('view-detail');
         this.ratioLabel = document.getElementById('minimap-ratio');
-        this.lastRenderKey = '';
+        this.lastOrientationKey = '';
+        this.lastMinimapKey = '';
+        this.lastTextKey = '';
     }
 
     resize() {
-        this.lastRenderKey = '';
+        this.lastOrientationKey = '';
+        this.lastMinimapKey = '';
+        this.lastTextKey = '';
     }
 
     render(level, player, force = false) {
         if (!level || !level.levelData || !this.orientationCanvas || !this.minimapCanvas) return;
 
         const pulseFrame = Math.floor(performance.now() / 120);
-        const key = [
+        const orientationKey = [
             level.levelData.id,
             level.width, level.height, level.depth,
             level.viewAxis, level.viewX, level.viewZ,
+            this.orientationCanvas.clientWidth, this.orientationCanvas.clientHeight,
+        ].join('|');
+        const minimapKey = [
+            orientationKey,
             player.visualX.toFixed(3), player.visualZ.toFixed(3),
             player.moveStartX, player.moveStartZ, player.moveEndX, player.moveEndZ,
-            this.orientationCanvas.clientWidth, this.orientationCanvas.clientHeight,
             this.minimapViewport.clientWidth, this.minimapViewport.clientHeight,
             pulseFrame,
         ].join('|');
+        const textKey = [level.levelData.id, level.viewAxis, level.viewX, level.viewZ].join('|');
 
-        if (!force && key === this.lastRenderKey) return;
-        this.lastRenderKey = key;
-
-        this._drawOrientation(level);
-        this._drawMinimap(level, player);
-        this._updateText(level);
+        // [MODIFIED] Each sidebar section now redraws only when its own inputs change.
+        if (force || orientationKey !== this.lastOrientationKey) {
+            this.lastOrientationKey = orientationKey;
+            this._drawOrientation(level);
+        }
+        if (force || minimapKey !== this.lastMinimapKey) {
+            this.lastMinimapKey = minimapKey;
+            this._drawMinimap(level, player);
+        }
+        if (force || textKey !== this.lastTextKey) {
+            this.lastTextKey = textKey;
+            this._updateText(level);
+        }
     }
 
     _prepareCanvas(canvas, cssWidth, cssHeight) {
@@ -158,8 +173,10 @@ class SidebarMapUI {
 
         cssWidth = Math.max(1, cssWidth);
         cssHeight = Math.max(1, cssHeight);
-        this.minimapCanvas.style.width = `${cssWidth}px`;
-        this.minimapCanvas.style.height = `${cssHeight}px`;
+        const widthStyle = `${cssWidth}px`;
+        const heightStyle = `${cssHeight}px`;
+        if (this.minimapCanvas.style.width !== widthStyle) this.minimapCanvas.style.width = widthStyle;
+        if (this.minimapCanvas.style.height !== heightStyle) this.minimapCanvas.style.height = heightStyle;
 
         const { ctx, width, height } = this._prepareCanvas(this.minimapCanvas, cssWidth, cssHeight);
         const cellW = width / level.width;
@@ -251,12 +268,13 @@ class SidebarMapUI {
         ctx.fill();
         ctx.restore();
 
-        this.minimapCanvas.setAttribute(
-            'aria-label',
+        const ariaLabel =
             `실제 X 대 Z 비율 ${level.width} 대 ${level.depth}, ` +
             `플레이어 X ${player.gridX + 1}, Z ${player.gridZ + 1}, ` +
-            `목표 X ${level.portalPos.x + 1}, Z ${level.portalPos.z + 1}`
-        );
+            `목표 X ${level.portalPos.x + 1}, Z ${level.portalPos.z + 1}`;
+        if (this.minimapCanvas.getAttribute('aria-label') !== ariaLabel) {
+            this.minimapCanvas.setAttribute('aria-label', ariaLabel);
+        }
     }
 
     _updateText(level) {
