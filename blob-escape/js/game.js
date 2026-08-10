@@ -49,6 +49,9 @@ class Game {
         // 계속 그려서 페이드아웃이 보이게 함(tutorialMsg 자체를 렌더 조건으로 쓰면 즉시 사라져 보였음)
         this.lastTutorialMsg = '';
         this.screenShake = 0;
+        // [MODIFIED] 불 블록에 막혔을 때 플레이어 앞 경계선에 뜨는 열기 배리어 이펙트 상태.
+        // null이면 표시 안 함. t는 등장 이후 경과 시간(초), duration은 총 지속 시간(페이드인+유지+페이드아웃).
+        this.fireBarrier = null;
         this.time = 0;
 
         // Transition (level-load fade to/from black; unrelated to Tab/Q/E view transitions below)
@@ -168,6 +171,14 @@ class Game {
         if (this.screenShake > 0) {
             this.screenShake *= 0.9;
             if (this.screenShake < 0.3) this.screenShake = 0;
+        }
+
+        // [MODIFIED] 불 배리어 수명 갱신 -- duration 지나면 제거
+        if (this.fireBarrier) {
+            this.fireBarrier.t += dt;
+            if (this.fireBarrier.t >= this.fireBarrier.duration) {
+                this.fireBarrier = null;
+            }
         }
 
         // Tutorial alpha
@@ -549,6 +560,8 @@ class Game {
         const firePos = this._scanForFire(startX, startY, startZ, x, y, z, dx, dy, dz);
         if (firePos) {
             if (startState !== STATE.ICE) {
+                // [MODIFIED] 이동이 통째로 무효화될 때 플레이어 앞 경계선에 열기 배리어 이펙트 표시
+                this._triggerFireBarrier(direction, startX, startY, startZ);
                 return;
             }
 
@@ -811,6 +824,83 @@ class Game {
         }
 
         return null;
+    }
+
+    _triggerFireBarrier(direction, gx, gy, gz) {
+        const center = this._gridToPixel(gx, gy, gz);
+        const unit = DIR[direction];
+        if (!center || !unit) return;
+
+        const tile = this.level.tileSize;
+        this.fireBarrier = {
+            nearX: center.x + unit.x * (tile / 2),
+            nearY: center.y + unit.y * (tile / 2),
+            dirX: unit.x,
+            dirY: unit.y,
+            tile,
+            t: 0,
+            fadeIn: 0.05,   // 등장은 빠르게
+            hold: 0.16,
+            duration: 0.4,
+        };
+    }
+
+    _fireBarrierEnvelope(b) {
+        const { t, fadeIn, hold, duration } = b;
+        if (t < fadeIn) return t / fadeIn;
+        if (t < fadeIn + hold) return 1;
+        const fadeOutDur = Math.max(0.0001, duration - fadeIn - hold);
+        return Math.max(0, 1 - (t - fadeIn - hold) / fadeOutDur);
+    }
+
+    _renderFireBarrier(ctx) {
+        const b = this.fireBarrier;
+        if (!b) return;
+        const visibility = this._fireBarrierEnvelope(b);
+        if (visibility <= 0) return;
+
+        const depth = b.tile * 0.55;
+        const nearX = b.nearX, nearY = b.nearY;
+        const farX = nearX + b.dirX * depth;
+        const farY = nearY + b.dirY * depth;
+
+        let rx, ry, rw, rh;
+        if (b.dirX !== 0) {
+            rw = depth; rh = b.tile;
+            rx = Math.min(nearX, farX); ry = nearY - b.tile / 2;
+        } else {
+            rw = b.tile; rh = depth;
+            rx = nearX - b.tile / 2; ry = Math.min(nearY, farY);
+        }
+
+        const grad = ctx.createLinearGradient(nearX, nearY, farX, farY);
+        const steps = 14;
+        const maxAlpha = 0.92 * visibility;
+        for (let i = 0; i < steps; i++) {
+            const t = i / (steps - 1);
+            const a = maxAlpha * Math.pow(1 - t, 1.3);
+            grad.addColorStop(t, `rgba(255,138,89,${a.toFixed(3)})`);
+        }
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(255,112,67,0.9)';
+        ctx.shadowBlur = 18 * visibility;
+        ctx.fillStyle = grad;
+        ctx.fillRect(rx, ry, rw, rh);
+
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = `rgba(255,196,163,${0.85 * visibility})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        if (b.dirX !== 0) {
+            ctx.moveTo(nearX, ry);
+            ctx.lineTo(nearX, ry + rh);
+        } else {
+            ctx.moveTo(rx, nearY);
+            ctx.lineTo(rx + rw, nearY);
+        }
+        ctx.stroke();
+        ctx.restore();
     }
 
     _onMoveComplete(x, y, z, hitWallType, itemsConsumed, hitWallX, hitWallY, hitWallZ) {
@@ -1195,6 +1285,8 @@ class Game {
         this._renderBoardLayer(ctx, w, h);
         // [MODIFIED] Tab 롱프레스로 전환을 준비 중일 때 마우스가 가리키는 칸을 하이라이트
         this._renderTabHoverHighlight(ctx);
+        // [MODIFIED] 불 블록에 막혔을 때의 열기 배리어 이펙트
+        this._renderFireBarrier(ctx);
 
         // HUD (DOM-based, updated separately from render)
         this._updateHUD();
@@ -1261,6 +1353,7 @@ class Game {
 
         // Player
         this.player.render(ctx, this.level);
+
     }
 
     // Board-only redraw with no new particle emission -- used solely to capture the
